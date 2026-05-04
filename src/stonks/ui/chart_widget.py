@@ -22,7 +22,7 @@ class ChartWidget(QWidget):
         self.conn = conn
         self._current_ticker = None
         self._current_period = "1M"
-        self._worker = None
+        self._workers: list[HistoryWorker] = []
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -82,16 +82,15 @@ class ChartWidget(QWidget):
         self.header_label.setText(f"<b>{ticker}</b>")
         self._show_status("Loading...")
 
-        period_key = self._current_period
-        yf_period, yf_interval = TIME_RANGES[period_key]
+        yf_period, yf_interval = TIME_RANGES[self._current_period]
 
-        if self._worker is not None and self._worker.isRunning():
-            self._worker.quit()
-
-        self._worker = HistoryWorker(ticker, yf_period, yf_interval)
-        self._worker.finished.connect(self._on_data_received)
-        self._worker.error.connect(self._on_data_error)
-        self._worker.start()
+        worker = HistoryWorker(ticker, yf_period, yf_interval)
+        worker.finished.connect(lambda df, t=ticker: self._on_data_received(df, t))
+        worker.error.connect(lambda _err, t=ticker: self._on_data_error(t))
+        worker.finished.connect(lambda _df, w=worker: self._workers.remove(w))
+        worker.error.connect(lambda _err, w=worker: self._workers.remove(w))
+        self._workers.append(worker)
+        worker.start()
 
     def set_range_by_index(self, index: int):
         labels = list(TIME_RANGES.keys())
@@ -123,7 +122,10 @@ class ChartWidget(QWidget):
         if self._current_ticker:
             self.update_chart(self._current_ticker)
 
-    def _on_data_received(self, df):
+    def _on_data_received(self, df, ticker: str):
+        if ticker != self._current_ticker:
+            return
+
         self._status_label.setVisible(False)
         self.plot_widget.clear()
         self.plot_widget.addItem(self._vline)
@@ -168,7 +170,9 @@ class ChartWidget(QWidget):
             f'<span style="color:{price_color}">{sign}{change_pct:.2f}%</span>'
         )
 
-    def _on_data_error(self, error: str):
+    def _on_data_error(self, ticker: str):
+        if ticker != self._current_ticker:
+            return
         self._show_status("Failed to load data. Check your connection.")
 
     def _on_mouse_moved(self, pos):

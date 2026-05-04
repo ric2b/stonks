@@ -49,7 +49,8 @@ def format_number(value, fmt_type: str) -> str:
 class DetailView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._worker = None
+        self._current_ticker = None
+        self._workers: list[InfoWorker] = []
         self._value_labels = {}
 
         grid = QGridLayout(self)
@@ -74,17 +75,20 @@ class DetailView(QWidget):
             self._value_labels[key] = value_label
 
     def update_detail(self, ticker: str):
+        self._current_ticker = ticker
         for label in self._value_labels.values():
             label.setText("--")
 
-        if self._worker is not None and self._worker.isRunning():
-            self._worker.quit()
+        worker = InfoWorker(ticker)
+        worker.finished.connect(lambda info, t=ticker: self._on_info_received(info, t))
+        worker.finished.connect(lambda _info, w=worker: self._workers.remove(w))
+        worker.error.connect(lambda _err, w=worker: self._workers.remove(w))
+        self._workers.append(worker)
+        worker.start()
 
-        self._worker = InfoWorker(ticker)
-        self._worker.finished.connect(self._on_info_received)
-        self._worker.start()
-
-    def _on_info_received(self, info: dict):
+    def _on_info_received(self, info: dict, ticker: str):
+        if ticker != self._current_ticker:
+            return
         for _, key, fmt_type in STATS:
             value = info.get(key)
             if key in self._value_labels:

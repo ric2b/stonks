@@ -99,6 +99,8 @@ class WatchlistWidget(QWidget):
         worker = ValidateWorker(ticker)
         worker.finished.connect(self._on_ticker_validated)
         worker.error.connect(self._on_validate_error)
+        worker.finished.connect(lambda _v, _t, w=worker: self._workers.remove(w))
+        worker.error.connect(lambda _err, w=worker: self._workers.remove(w))
         self._workers.append(worker)
         worker.start()
 
@@ -149,6 +151,8 @@ class WatchlistWidget(QWidget):
             return
         worker = PriceUpdateWorker(tickers)
         worker.finished.connect(self._on_prices_updated)
+        worker.finished.connect(lambda _prices, w=worker: self._workers.remove(w))
+        worker.error.connect(lambda _err, w=worker: self._workers.remove(w))
         self._workers.append(worker)
         worker.start()
 
