@@ -1,8 +1,9 @@
 import sqlite3
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QMainWindow, QSplitter, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
 
+from stonks.ui.chart_widget import ChartWidget
 from stonks.ui.watchlist import WatchlistWidget
 
 
@@ -20,7 +21,11 @@ class MainWindow(QMainWindow):
 
         self.right_pane = QWidget()
         right_layout = QVBoxLayout(self.right_pane)
-        right_layout.addWidget(QLabel("Select a stock from the watchlist"))
+        right_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.chart = ChartWidget(conn)
+        right_layout.addWidget(self.chart)
+
         splitter.addWidget(self.right_pane)
 
         splitter.setSizes([250, 650])
@@ -29,4 +34,4 @@ class MainWindow(QMainWindow):
         self.watchlist.ticker_selected.connect(self._on_ticker_selected)
 
     def _on_ticker_selected(self, ticker: str):
-        pass
+        self.chart.update_chart(ticker)
