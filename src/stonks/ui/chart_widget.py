@@ -137,6 +137,14 @@ class ChartWidget(QWidget):
         timestamps = np.array([ts.timestamp() for ts in df.index])
         prices = df["Close"].values.astype(float)
 
+        mask = ~np.isnan(prices)
+        timestamps = timestamps[mask]
+        prices = prices[mask]
+
+        if len(prices) == 0:
+            self._show_status("No data available")
+            return
+
         self._timestamps = timestamps
         self._prices = prices
 
