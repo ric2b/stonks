@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(splitter)
 
         self.watchlist.ticker_selected.connect(self._on_ticker_selected)
+        self.watchlist.select_first()
 
         self._setup_shortcuts()
 

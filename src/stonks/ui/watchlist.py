@@ -79,6 +79,10 @@ class WatchlistWidget(QWidget):
         for entry in get_watchlist(self.conn):
             self._add_list_item(entry["ticker"])
 
+    def select_first(self):
+        if self.list_widget.count() > 0:
+            self.list_widget.setCurrentRow(0)
+
     def _add_list_item(self, ticker: str):
         item = QListWidgetItem(self.list_widget)
         widget = WatchlistItemWidget(ticker)
