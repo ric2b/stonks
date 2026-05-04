@@ -1,0 +1,31 @@
+app-id: com.stonks.Stonks
+runtime: org.kde.Platform
+runtime-version: '6.7'
+sdk: org.kde.Sdk
+command: stonks
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+
+modules:
+  - name: python3-deps
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app --no-deps -r requirements.txt
+    sources:
+      - type: file
+        path: requirements.txt
+
+  - name: stonks
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app --no-deps .
+      - install -Dm644 flatpak/com.stonks.Stonks.desktop /app/share/applications/com.stonks.Stonks.desktop
+      - install -Dm644 flatpak/com.stonks.Stonks.metainfo.xml /app/share/metainfo/com.stonks.Stonks.metainfo.xml
+      - install -Dm644 assets/com.stonks.Stonks.svg /app/share/icons/hicolor/scalable/apps/com.stonks.Stonks.svg
+    sources:
+      - type: dir
+        path: ..

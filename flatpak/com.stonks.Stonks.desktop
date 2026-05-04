@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Stonks
+Comment=Desktop stock tracker
+Exec=stonks
+Icon=com.stonks.Stonks
+Terminal=false
+Type=Application
+Categories=Finance;Office;
+Keywords=stocks;finance;trading;market;

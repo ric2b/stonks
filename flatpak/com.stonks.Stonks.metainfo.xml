@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.stonks.Stonks</id>
+  <name>Stonks</name>
+  <summary>Desktop stock tracker for Linux</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <description>
+    <p>
+      Track your favorite stocks with interactive charts and key financial stats.
+      Add tickers to your watchlist, view price history across multiple time ranges,
+      and see detailed metrics like P/E ratio, market cap, and 52-week range.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.stonks.Stonks.desktop</launchable>
+  <url type="homepage">https://github.com/ramendoeira/stonks</url>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-05-04">
+      <description>
+        <p>Initial release with watchlist, charts, and stock details.</p>
+      </description>
+    </release>
+  </releases>
+</component>
