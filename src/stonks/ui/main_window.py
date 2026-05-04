@@ -1,9 +1,32 @@
-from PySide6.QtWidgets import QLabel, QMainWindow
+import sqlite3
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel, QMainWindow, QSplitter, QVBoxLayout, QWidget
+
+from stonks.ui.watchlist import WatchlistWidget
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, conn: sqlite3.Connection):
         super().__init__()
+        self.conn = conn
         self.setWindowTitle("Stonks")
         self.setMinimumSize(900, 600)
-        self.setCentralWidget(QLabel("Hello Stonks"))
+
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        self.watchlist = WatchlistWidget(conn)
+        splitter.addWidget(self.watchlist)
+
+        self.right_pane = QWidget()
+        right_layout = QVBoxLayout(self.right_pane)
+        right_layout.addWidget(QLabel("Select a stock from the watchlist"))
+        splitter.addWidget(self.right_pane)
+
+        splitter.setSizes([250, 650])
+        self.setCentralWidget(splitter)
+
+        self.watchlist.ticker_selected.connect(self._on_ticker_selected)
+
+    def _on_ticker_selected(self, ticker: str):
+        pass
