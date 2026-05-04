@@ -1,10 +1,12 @@
 import sqlite3
+from datetime import datetime
 
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtWidgets import (
     QButtonGroup,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -25,8 +27,12 @@ class ChartWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
+        self.header_label = QLabel()
+        self.header_label.setStyleSheet("font-size: 16px; padding: 8px;")
+        layout.addWidget(self.header_label)
+
         button_layout = QHBoxLayout()
-        button_layout.setContentsMargins(8, 8, 8, 0)
+        button_layout.setContentsMargins(8, 0, 8, 0)
         self.button_group = QButtonGroup(self)
         self.button_group.setExclusive(True)
 
@@ -51,6 +57,10 @@ class ChartWidget(QWidget):
         self.plot_widget.hideButtons()
         layout.addWidget(self.plot_widget)
 
+        self._status_label = pg.TextItem(anchor=(0.5, 0.5))
+        self._status_label.setVisible(False)
+        self.plot_widget.addItem(self._status_label)
+
         self._vline = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("#888", width=1))
         self._vline.setVisible(False)
         self.plot_widget.addItem(self._vline)
@@ -69,6 +79,9 @@ class ChartWidget(QWidget):
         if period is not None:
             self._current_period = period
 
+        self.header_label.setText(f"<b>{ticker}</b>")
+        self._show_status("Loading...")
+
         period_key = self._current_period
         yf_period, yf_interval = TIME_RANGES[period_key]
 
@@ -80,6 +93,30 @@ class ChartWidget(QWidget):
         self._worker.error.connect(self._on_data_error)
         self._worker.start()
 
+    def set_range_by_index(self, index: int):
+        labels = list(TIME_RANGES.keys())
+        if 0 <= index < len(labels):
+            btn = self.button_group.button(index)
+            if btn:
+                btn.setChecked(True)
+                self._on_range_changed(index)
+
+    def _show_status(self, text: str):
+        self.plot_widget.clear()
+        self.plot_widget.addItem(self._vline)
+        self.plot_widget.addItem(self._crosshair_label)
+        self.plot_widget.addItem(self._status_label)
+        self._vline.setVisible(False)
+        self._crosshair_label.setVisible(False)
+        self._timestamps = None
+        self._prices = None
+
+        self._status_label.setText(text)
+        self._status_label.setPos(0, 0)
+        self._status_label.setVisible(True)
+        self.plot_widget.setXRange(-1, 1)
+        self.plot_widget.setYRange(-1, 1)
+
     def _on_range_changed(self, button_id: int):
         labels = list(TIME_RANGES.keys())
         self._current_period = labels[button_id]
@@ -87,11 +124,14 @@ class ChartWidget(QWidget):
             self.update_chart(self._current_ticker)
 
     def _on_data_received(self, df):
+        self._status_label.setVisible(False)
         self.plot_widget.clear()
         self.plot_widget.addItem(self._vline)
         self.plot_widget.addItem(self._crosshair_label)
+        self.plot_widget.addItem(self._status_label)
 
         if df.empty:
+            self._show_status("No data available")
             return
 
         timestamps = df.index.astype(np.int64) // 10**9
@@ -110,31 +150,38 @@ class ChartWidget(QWidget):
         )
         self.plot_widget.autoRange()
 
+        current_price = prices[-1]
+        change = prices[-1] - prices[0]
+        change_pct = (change / prices[0]) * 100
+        sign = "+" if change >= 0 else ""
+        price_color = "#4CAF50" if change >= 0 else "#F44336"
+        self.header_label.setText(
+            f"<b>{self._current_ticker}</b> &nbsp; ${current_price:.2f} "
+            f'<span style="color:{price_color}">{sign}{change_pct:.2f}%</span>'
+        )
+
     def _on_data_error(self, error: str):
-        self.plot_widget.clear()
-        self.plot_widget.addItem(self._vline)
-        self.plot_widget.addItem(self._crosshair_label)
-        self._timestamps = None
-        self._prices = None
+        self._show_status("Failed to load data. Check your connection.")
 
     def _on_mouse_moved(self, pos):
         if self._timestamps is None or self._prices is None:
             return
 
         vb = self.plot_widget.plotItem.vb
+        if not vb.sceneBoundingRect().contains(pos):
+            return
+
         mouse_point = vb.mapSceneToView(pos)
         x = mouse_point.x()
 
-        idx = np.searchsorted(self._timestamps, x)
-        idx = np.clip(idx, 0, len(self._timestamps) - 1)
+        idx = int(np.searchsorted(self._timestamps, x))
+        idx = max(0, min(idx, len(self._timestamps) - 1))
 
-        self._vline.setPos(self._timestamps[idx])
+        self._vline.setPos(float(self._timestamps[idx]))
         self._vline.setVisible(True)
-
-        from datetime import datetime
 
         dt = datetime.fromtimestamp(int(self._timestamps[idx]))
         price = self._prices[idx]
         self._crosshair_label.setText(f"{dt.strftime('%b %d, %Y')}  ${price:.2f}")
-        self._crosshair_label.setPos(self._timestamps[idx], price)
+        self._crosshair_label.setPos(float(self._timestamps[idx]), float(price))
         self._crosshair_label.setVisible(True)
