@@ -134,10 +134,10 @@ class ChartWidget(QWidget):
             self._show_status("No data available")
             return
 
-        timestamps = df.index.astype(np.int64) // 10**9
+        timestamps = np.array([ts.timestamp() for ts in df.index])
         prices = df["Close"].values.astype(float)
 
-        self._timestamps = timestamps.values if hasattr(timestamps, "values") else timestamps
+        self._timestamps = timestamps
         self._prices = prices
 
         is_up = prices[-1] >= prices[0]
