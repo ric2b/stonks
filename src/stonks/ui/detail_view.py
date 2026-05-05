@@ -100,6 +100,7 @@ class _StatPair(QWidget):
 
 class DetailView(QWidget):
     info_received = Signal(str, str, str, str)
+    market_state_changed = Signal(str, int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -178,3 +179,7 @@ class DetailView(QWidget):
         name = info.get("longName") or info.get("shortName") or ticker
         exchange = info.get("fullExchangeName") or info.get("exchange") or ""
         self.info_received.emit(ticker, name, exchange, currency_code)
+
+        market_state = info.get("marketState") or "CLOSED"
+        delay = int(info.get("exchangeDataDelayedBy") or 0)
+        self.market_state_changed.emit(market_state, delay)

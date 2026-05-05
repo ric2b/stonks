@@ -31,14 +31,14 @@ class _StatusBar(QWidget):
         layout.setContentsMargins(12, 0, 12, 0)
         layout.setSpacing(8)
 
-        dot = QLabel()
-        dot.setObjectName("liveDot")
-        dot.setFixedSize(6, 6)
-        layout.addWidget(dot, alignment=Qt.AlignmentFlag.AlignVCenter)
+        self._dot = QLabel()
+        self._dot.setObjectName("liveDot")
+        self._dot.setFixedSize(6, 6)
+        layout.addWidget(self._dot, alignment=Qt.AlignmentFlag.AlignVCenter)
 
-        live = QLabel("LIVE")
-        live.setObjectName("statusText")
-        layout.addWidget(live)
+        self._state_label = QLabel("LIVE")
+        self._state_label.setObjectName("statusText")
+        layout.addWidget(self._state_label)
 
         self._refresh_label = QLabel()
         self._refresh_label.setObjectName("statusText")
@@ -70,6 +70,29 @@ class _StatusBar(QWidget):
     def _update_refresh_time(self):
         now = datetime.now().strftime("%H:%M")
         self._refresh_label.setText(f"Refreshed · {now}")
+
+    _DOT_COLORS = {
+        "green": "#4cd278",
+        "yellow": "#f0b840",
+        "blue": "#5b9bf5",
+        "grey": "rgba(255, 255, 255, 80)",
+    }
+
+    def set_market_state(self, market_state: str, delay: int):
+        if market_state == "REGULAR" and delay == 0:
+            text, color = "LIVE", "green"
+        elif market_state == "REGULAR":
+            minutes = delay // 60
+            text = f"DELAYED {minutes}MIN" if minutes else "DELAYED"
+            color = "yellow"
+        elif market_state == "PRE":
+            text, color = "PRE-MARKET", "blue"
+        elif market_state in ("POST", "POSTPOST"):
+            text, color = "AFTER HOURS", "blue"
+        else:
+            text, color = "MARKET CLOSED", "grey"
+        self._state_label.setText(text)
+        self._dot.setStyleSheet(f"background-color: {self._DOT_COLORS[color]}; border-radius: 3px;")
 
     def show_message(self, text: str, ms: int = 3000):
         self._msg_label.setText(text)
@@ -119,6 +142,7 @@ class MainWindow(QMainWindow):
         self.watchlist.ticker_selected.connect(self._on_ticker_selected)
         self.detail_view.info_received.connect(self.chart.set_company_info)
         self.detail_view.info_received.connect(self._on_info_received)
+        self.detail_view.market_state_changed.connect(self.status_bar.set_market_state)
         self.chart.range_changed.connect(self._on_chart_range_changed)
 
         self._restore_session()
