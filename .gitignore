@@ -21,3 +21,7 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Flatpak generated artifacts
+flatpak/requirements.txt
+flatpak/python3-deps.json

@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  flatpak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Generate requirements.txt
+        run: uv export --no-dev --no-hashes -o flatpak/requirements.txt
+
+      - name: Generate Flatpak Python deps manifest
+        run: |
+          pip install flatpak-pip-generator
+          flatpak-pip-generator \
+            --requirements-file flatpak/requirements.txt \
+            --output flatpak/python3-deps
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: stonks.flatpak
+          manifest-path: flatpak/com.stonks.Stonks.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: stonks.flatpak
