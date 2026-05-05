@@ -1,5 +1,7 @@
 # Stonks
 
+<img src="assets/com.stonks.Stonks.svg" width="96" alt="Stonks icon"/>
+
 Desktop stock tracker for Linux, inspired by the macOS Stocks app.
 
 ## Features

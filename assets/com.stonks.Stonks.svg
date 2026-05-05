@@ -1,14 +1,58 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <rect width="128" height="128" rx="16" fill="#1a1a2e"/>
-  <polyline
-    points="20,95 40,80 55,85 75,55 95,45 110,30"
-    fill="none"
-    stroke="#4CAF50"
-    stroke-width="6"
-    stroke-linecap="round"
-    stroke-linejoin="round"/>
-  <polygon
-    points="20,95 40,80 55,85 75,55 95,45 110,30 110,105 20,105"
-    fill="#4CAF50"
-    opacity="0.2"/>
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="128" height="128" rx="16" fill="#1a3870"/>
+
+  <!-- Orange arrow (behind figure) -->
+  <polygon points="55,102 102,40 108,44 110,18 86,28 92,33 45,95"
+           fill="#FF7700" filter="url(#glow)"/>
+
+  <!-- Head -->
+  <ellipse cx="44" cy="36" rx="15" ry="19" fill="#c4b49a"/>
+
+  <!-- Eyes: dark and visible -->
+  <ellipse cx="38" cy="34" rx="3.5" ry="2.5" fill="#1a0c04"/>
+  <ellipse cx="50" cy="34" rx="3.5" ry="2.5" fill="#1a0c04"/>
+
+  <!-- Smirk: slight upward curve, off-centre to suggest smugness -->
+  <path d="M38,44 Q44,48 50,44" fill="none" stroke="#5a3520" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Neck -->
+  <rect x="39" y="53" width="10" height="11" fill="#c4b49a"/>
+
+  <!-- Suit body -->
+  <path d="M15,65 Q44,58 73,65 L76,112 L12,112 Z" fill="#555565"/>
+
+  <!-- White shirt V -->
+  <path d="M37,63 L44,79 L51,63 Z" fill="#e8e8e8"/>
+
+  <!-- Blue tie -->
+  <path d="M44,63 L41,75 L44,79 L47,75 Z" fill="#1e50e0"/>
+
+  <!-- Lapels -->
+  <path d="M15,65 L37,63 L33,77 Z" fill="#424252"/>
+  <path d="M73,65 L51,63 L55,77 Z" fill="#424252"/>
+
+  <!-- CROSSED ARMS -->
+  <!-- Right arm (behind): upper-left to lower-right across chest -->
+  <rect x="13" y="72" width="52" height="14" rx="7" fill="#424252"
+        transform="rotate(16, 39, 79)"/>
+  <!-- Right hand peeking at lower-right -->
+  <ellipse cx="64" cy="86" rx="7" ry="5" fill="#c4b49a" transform="rotate(16, 64, 86)"/>
+
+  <!-- Left arm (in front): upper-right to lower-left across chest -->
+  <rect x="13" y="78" width="52" height="14" rx="7" fill="#565666"
+        transform="rotate(-14, 39, 85)"/>
+  <!-- Left hand peeking at lower-left -->
+  <ellipse cx="15" cy="91" rx="7" ry="5" fill="#c4b49a" transform="rotate(-14, 15, 91)"/>
 </svg>
+

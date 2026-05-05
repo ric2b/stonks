@@ -1,14 +1,18 @@
 import signal
 import sys
+from pathlib import Path
 
 import pyqtgraph as pg
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from stonks.config import DB_PATH
 from stonks.models.database import init_db
 from stonks.ui.main_window import MainWindow
 from stonks.ui.style import DARK_STYLE
+
+_ICON_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "com.stonks.Stonks.svg"
 
 
 def main():
@@ -18,6 +22,8 @@ def main():
     app.setApplicationName("Stonks")
     app.setDesktopFileName("com.stonks.Stonks")
     app.setStyleSheet(DARK_STYLE)
+    if _ICON_PATH.exists():
+        app.setWindowIcon(QIcon(str(_ICON_PATH)))
 
     # Restore default SIGINT so Ctrl+C works; QTimer gives Python a chance to see it.
     signal.signal(signal.SIGINT, signal.SIG_DFL)
