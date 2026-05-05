@@ -48,6 +48,71 @@ jobs:
           files: dist/stonks-macos.dmg
           # token: ${{ secrets.PAT_TOKEN }}
 
+  appimage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-cursor0 librsvg2-bin libfuse2t64
+
+      - name: Install Python dependencies
+        run: uv sync --no-dev
+
+      - name: Build with PyInstaller
+        run: |
+          uv pip install pyinstaller
+          uv run pyinstaller --name Stonks --collect-all pyqtgraph src/stonks/main.py
+
+      - name: Create AppDir
+        run: |
+          mkdir -p Stonks.AppDir/usr/bin
+          mkdir -p Stonks.AppDir/usr/share/icons/hicolor/256x256/apps
+          mkdir -p Stonks.AppDir/usr/share/applications
+
+          cp -r dist/Stonks/* Stonks.AppDir/usr/bin/
+
+          rsvg-convert -w 256 -h 256 assets/com.stonks.Stonks.svg \
+            > Stonks.AppDir/com.stonks.Stonks.png
+          cp Stonks.AppDir/com.stonks.Stonks.png \
+            Stonks.AppDir/usr/share/icons/hicolor/256x256/apps/
+
+          cat > Stonks.AppDir/com.stonks.Stonks.desktop <<'EOF'
+          [Desktop Entry]
+          Name=Stonks
+          Exec=Stonks
+          Icon=com.stonks.Stonks
+          Type=Application
+          Categories=Finance;
+          EOF
+          sed -i 's/^          //' Stonks.AppDir/com.stonks.Stonks.desktop
+          cp Stonks.AppDir/com.stonks.Stonks.desktop \
+            Stonks.AppDir/usr/share/applications/
+
+          cat > Stonks.AppDir/AppRun <<'APPRUN'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          exec "$HERE/usr/bin/Stonks" "$@"
+          APPRUN
+          sed -i 's/^          //' Stonks.AppDir/AppRun
+          chmod +x Stonks.AppDir/AppRun
+
+      - name: Build AppImage
+        run: |
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --no-appstream \
+            Stonks.AppDir dist/stonks-x86_64.AppImage
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/stonks-x86_64.AppImage
+
   snap:
     runs-on: ubuntu-latest
     steps:
