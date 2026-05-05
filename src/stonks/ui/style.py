@@ -112,18 +112,19 @@ QPushButton#addTickerBtn:pressed {
 
 /* ── Range tab pill container ────────────────────────── */
 QFrame#rangeTabBar {
-    background-color: #303030;
-    border: 1px solid rgba(255, 255, 255, 20);
-    border-radius: 999px;
+    background-color: #383838;
+    border: 1px solid rgba(255, 255, 255, 36);
+    border-radius: 16px;
+    padding: 3px;
 }
 QPushButton#rangeBtn {
     background-color: transparent;
     border: none;
-    border-radius: 999px;
-    padding: 5px 10px;
+    border-radius: 12px;
+    padding: 6px 14px;
     color: rgba(255, 255, 255, 158);
-    font-family: "JetBrains Mono", "Courier New", monospace;
-    font-size: 11px;
+    font-family: "Inter", "Cantarell", system-ui, sans-serif;
+    font-size: 12px;
     font-weight: 500;
     min-width: 28px;
 }
@@ -132,8 +133,8 @@ QPushButton#rangeBtn:hover {
     background-color: rgba(255, 255, 255, 13);
 }
 QPushButton#rangeBtn:checked {
-    background-color: rgba(255, 255, 255, 26);
-    border: 1px solid rgba(255, 255, 255, 36);
+    background-color: #4a4a4a;
+    border: 1px solid rgba(255, 255, 255, 50);
     color: rgba(255, 255, 255, 235);
     font-weight: 600;
 }

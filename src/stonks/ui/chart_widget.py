@@ -425,7 +425,7 @@ class ChartWidget(QWidget):
         dt = datetime.fromtimestamp(int(ts))
         self._hover_date.setGeometry(
             pw.x() + pw.width() // 2 - lbl_date_w // 2,
-            pw_top - lbl_date_h - 2,
+            pw_top + 4,
             lbl_date_w,
             lbl_date_h,
         )
