@@ -5,6 +5,7 @@ from stonks.models.database import (
     remove_ticker,
     reorder_watchlist,
     set_setting,
+    update_ticker_meta,
 )
 
 
@@ -92,3 +93,28 @@ def test_settings_are_independent(db):
     set_setting(db, "last_period", "1M")
     assert get_setting(db, "last_ticker") == "AAPL"
     assert get_setting(db, "last_period") == "1M"
+
+
+def test_watchlist_returns_name_and_currency(db):
+    add_ticker(db, "AAPL")
+    entry = get_watchlist(db)[0]
+    assert entry["name"] == ""
+    assert entry["currency"] == ""
+
+
+def test_update_ticker_meta(db):
+    add_ticker(db, "AAPL")
+    update_ticker_meta(db, "AAPL", "Apple Inc.", "USD")
+    entry = get_watchlist(db)[0]
+    assert entry["name"] == "Apple Inc."
+    assert entry["currency"] == "USD"
+
+
+def test_update_ticker_meta_persists_across_reads(db):
+    add_ticker(db, "AAPL")
+    add_ticker(db, "MSFT")
+    update_ticker_meta(db, "MSFT", "Microsoft Corporation", "USD")
+    watchlist = get_watchlist(db)
+    assert watchlist[0]["name"] == ""
+    assert watchlist[1]["name"] == "Microsoft Corporation"
+    assert watchlist[1]["currency"] == "USD"

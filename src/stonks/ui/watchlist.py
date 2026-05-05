@@ -15,7 +15,13 @@ from PySide6.QtWidgets import (
 )
 
 from stonks.config import REFRESH_INTERVAL_MS
-from stonks.models.database import add_ticker, get_watchlist, remove_ticker, reorder_watchlist
+from stonks.models.database import (
+    add_ticker,
+    get_watchlist,
+    remove_ticker,
+    reorder_watchlist,
+    update_ticker_meta,
+)
 from stonks.services.stock_data import currency_format
 from stonks.ui.workers import NameFetchWorker, PriceUpdateWorker, SearchWorker, ValidateWorker
 
@@ -304,7 +310,7 @@ class WatchlistWidget(QWidget):
     def _load_watchlist(self):
         self.list_widget.clear()
         for entry in get_watchlist(self.conn):
-            self._add_list_item(entry["ticker"])
+            self._add_list_item(entry["ticker"], entry.get("name", ""), entry.get("currency", ""))
         self._update_count()
 
     def select_first(self):
@@ -318,13 +324,18 @@ class WatchlistWidget(QWidget):
                 return True
         return False
 
-    def _add_list_item(self, ticker: str):
+    def _add_list_item(self, ticker: str, name: str = "", currency: str = ""):
         item = QListWidgetItem(self.list_widget)
         widget = WatchlistItemWidget(ticker)
         item.setSizeHint(widget.sizeHint())
         item.setData(Qt.ItemDataRole.UserRole, ticker)
         self.list_widget.addItem(item)
         self.list_widget.setItemWidget(item, widget)
+        if name:
+            widget.name_label.setText(name)
+        if currency:
+            pre, suf = currency_format(currency)
+            widget.set_currency(pre, suf)
 
     def _on_context_menu(self, pos):
         item = self.list_widget.itemAt(pos)
@@ -373,6 +384,8 @@ class WatchlistWidget(QWidget):
                 if ticker in currencies:
                     pre, suf = currency_format(currencies[ticker])
                     widget.set_currency(pre, suf)
+                if ticker in names and ticker in currencies:
+                    update_ticker_meta(self.conn, ticker, names[ticker], currencies[ticker])
 
     def update_name(self, ticker: str, name: str):
         for i in range(self.list_widget.count()):

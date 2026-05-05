@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from stonks.config import TIME_RANGES
-from stonks.models.database import get_setting, set_setting
+from stonks.models.database import get_setting, set_setting, update_ticker_meta
 from stonks.services.stock_data import is_history_cached
 from stonks.ui.chart_widget import ChartWidget
 from stonks.ui.detail_view import DetailView
@@ -177,6 +177,7 @@ class MainWindow(QMainWindow):
     def _on_info_received(self, ticker: str, name: str, exchange: str, currency: str):
         self.watchlist.update_name(ticker, name)
         self.watchlist.update_currency(ticker, currency)
+        update_ticker_meta(self.conn, ticker, name, currency)
 
     def _on_ticker_selected(self, ticker: str):
         set_setting(self.conn, "last_ticker", ticker)

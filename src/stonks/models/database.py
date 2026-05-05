@@ -19,8 +19,17 @@ def init_db(db_path: Path) -> sqlite3.Connection:
             value TEXT NOT NULL
         )
     """)
+    _migrate_watchlist_columns(conn)
     conn.commit()
     return conn
+
+
+def _migrate_watchlist_columns(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(watchlist)").fetchall()}
+    if "name" not in cols:
+        conn.execute("ALTER TABLE watchlist ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+    if "currency" not in cols:
+        conn.execute("ALTER TABLE watchlist ADD COLUMN currency TEXT NOT NULL DEFAULT ''")
 
 
 def get_setting(conn: sqlite3.Connection, key: str, default: str = "") -> str:
@@ -37,8 +46,18 @@ def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
 
 
 def get_watchlist(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("SELECT ticker, position FROM watchlist ORDER BY position").fetchall()
+    rows = conn.execute(
+        "SELECT ticker, position, name, currency FROM watchlist ORDER BY position"
+    ).fetchall()
     return [dict(row) for row in rows]
+
+
+def update_ticker_meta(conn: sqlite3.Connection, ticker: str, name: str, currency: str) -> None:
+    conn.execute(
+        "UPDATE watchlist SET name = ?, currency = ? WHERE ticker = ?",
+        (name, currency, ticker.upper()),
+    )
+    conn.commit()
 
 
 def add_ticker(conn: sqlite3.Connection, ticker: str) -> None:
