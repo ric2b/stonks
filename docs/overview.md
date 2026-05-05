@@ -141,4 +141,3 @@ The chart auto-refreshes every **5 minutes** when the active period is intraday 
 - **No portfolio / cost-basis tracking** — purely a watchlist and chart viewer.
 - **No alerts or price notifications**.
 - **No chart auto-refresh for the selected ticker on non-intraday periods** — the chart only reloads on explicit user action for daily+ ranges (there is no useful new data to show mid-session anyway, but an explicit "refresh" button could be added).
-- **Flatpak packaging** — scaffolding is present in `flatpak/` but has not been validated end-to-end.

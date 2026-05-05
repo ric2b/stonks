@@ -48,23 +48,3 @@ jobs:
           files: dist/stonks-macos.dmg
           # token: ${{ secrets.PAT_TOKEN }}
 
-  flatpak:
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
-      options: --privileged
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Build Flatpak
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-        with:
-          bundle: stonks.flatpak
-          manifest-path: flatpak/com.stonks.Stonks.yml
-          cache-key: flatpak-builder-${{ github.sha }}
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: stonks.flatpak
-          # token: ${{ secrets.PAT_TOKEN }}
