@@ -1,21 +1,26 @@
-name: Release
+name: Release artifacts
+
+#permissions:
+#  contents: write
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
+
+#on: 
+#  release: 
+#    types: [created]
 
 jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: astral-sh/setup-uv@v5
-
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
       - name: Install dependencies
         run: uv sync --no-dev
-
       - name: Generate .icns
         run: |
           brew install librsvg
@@ -38,26 +43,18 @@ jobs:
             -ov -format UDZO dist/stonks-macos.dmg
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/stonks-macos.dmg
+          # token: ${{ secrets.PAT_TOKEN }}
 
   flatpak:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
+      options: --privileged
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: astral-sh/setup-uv@v5
-
-      - name: Generate requirements.txt
-        run: uv export --no-dev --no-hashes -o flatpak/requirements.txt
-
-      - name: Generate Flatpak Python deps manifest
-        run: |
-          pip install flatpak-pip-generator
-          flatpak-pip-generator \
-            --requirements-file flatpak/requirements.txt \
-            --output flatpak/python3-deps
+      - uses: actions/checkout@v6
 
       - name: Build Flatpak
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
@@ -67,6 +64,7 @@ jobs:
           cache-key: flatpak-builder-${{ github.sha }}
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: stonks.flatpak
+          # token: ${{ secrets.PAT_TOKEN }}
