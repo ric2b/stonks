@@ -48,3 +48,17 @@ jobs:
           files: dist/stonks-macos.dmg
           # token: ${{ secrets.PAT_TOKEN }}
 
+  snap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build snap
+        uses: snapcore/action-build@v1
+        id: build
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ steps.build.outputs.snap }}
+

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Stonks
+Comment=Desktop stock tracker
+Exec=stonks
+Icon=${SNAP}/meta/gui/icon.svg
+Terminal=false
+Categories=Finance;Office;
+Keywords=stocks;finance;trading;market;
