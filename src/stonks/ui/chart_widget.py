@@ -3,7 +3,7 @@ from datetime import datetime
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from stonks.config import TIME_RANGES
+from stonks.config import INTRADAY_INTERVALS, TIME_RANGES
 from stonks.models.database import set_setting
 from stonks.ui.workers import HistoryWorker
 
@@ -58,6 +58,10 @@ class ChartWidget(QWidget):
         self._current_period = "1M"
         self._workers: list[HistoryWorker] = []
         self._is_up = True
+
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setInterval(5 * 60 * 1000)
+        self._refresh_timer.timeout.connect(self._auto_refresh)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -213,6 +217,10 @@ class ChartWidget(QWidget):
         self._show_status("Loading...")
 
         yf_period, yf_interval = TIME_RANGES[self._current_period]
+        if yf_interval in INTRADAY_INTERVALS:
+            self._refresh_timer.start()
+        else:
+            self._refresh_timer.stop()
         worker = HistoryWorker(ticker, yf_period, yf_interval)
         worker.finished.connect(lambda df, t=ticker: self._on_data_received(df, t))
         worker.error.connect(lambda _err, t=ticker: self._on_data_error(t))
@@ -266,6 +274,15 @@ class ChartWidget(QWidget):
         labels = list(TIME_RANGES.keys())
         self._current_period = labels[button_id]
         set_setting(self.conn, "last_period", self._current_period)
+        _, interval = TIME_RANGES[self._current_period]
+        if interval in INTRADAY_INTERVALS:
+            self._refresh_timer.start()
+        else:
+            self._refresh_timer.stop()
+        if self._current_ticker:
+            self.update_chart(self._current_ticker)
+
+    def _auto_refresh(self):
         if self._current_ticker:
             self.update_chart(self._current_ticker)
 
