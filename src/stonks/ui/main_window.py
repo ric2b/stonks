@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from stonks.config import TIME_RANGES
+from stonks.models.database import get_setting, set_setting
 from stonks.ui.chart_widget import ChartWidget
 from stonks.ui.detail_view import DetailView
 from stonks.ui.watchlist import WatchlistWidget
@@ -113,8 +114,8 @@ class MainWindow(QMainWindow):
 
         self.watchlist.ticker_selected.connect(self._on_ticker_selected)
         self.detail_view.info_received.connect(self.chart.set_company_info)
-        self.watchlist.select_first()
 
+        self._restore_session()
         self._setup_shortcuts()
 
     def _setup_shortcuts(self):
@@ -130,7 +131,18 @@ class MainWindow(QMainWindow):
                 lambda idx=i: self.chart.set_range_by_index(idx),
             )
 
+    def _restore_session(self):
+        last_period = get_setting(self.conn, "last_period", "1M")
+        period_labels = list(TIME_RANGES.keys())
+        if last_period in period_labels:
+            self.chart.set_range_by_index(period_labels.index(last_period))
+
+        last_ticker = get_setting(self.conn, "last_ticker", "")
+        if not self.watchlist.select_ticker(last_ticker):
+            self.watchlist.select_first()
+
     def _on_ticker_selected(self, ticker: str):
+        set_setting(self.conn, "last_ticker", ticker)
         self.chart.update_chart(ticker)
         self.detail_view.update_detail(ticker)
         self.status_bar.show_message(f"Loading {ticker}…", 3000)

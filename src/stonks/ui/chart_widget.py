@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from stonks.config import TIME_RANGES
+from stonks.models.database import set_setting
 from stonks.ui.workers import HistoryWorker
 
 _DASH = Qt.PenStyle.DashLine
@@ -264,6 +265,7 @@ class ChartWidget(QWidget):
     def _on_range_changed(self, button_id: int):
         labels = list(TIME_RANGES.keys())
         self._current_period = labels[button_id]
+        set_setting(self.conn, "last_period", self._current_period)
         if self._current_ticker:
             self.update_chart(self._current_ticker)
 

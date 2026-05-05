@@ -295,6 +295,13 @@ class WatchlistWidget(QWidget):
         if self.list_widget.count() > 0:
             self.list_widget.setCurrentRow(0)
 
+    def select_ticker(self, ticker: str) -> bool:
+        for i in range(self.list_widget.count()):
+            if self.list_widget.item(i).data(Qt.ItemDataRole.UserRole) == ticker:
+                self.list_widget.setCurrentRow(i)
+                return True
+        return False
+
     def _add_list_item(self, ticker: str):
         item = QListWidgetItem(self.list_widget)
         widget = WatchlistItemWidget(ticker)

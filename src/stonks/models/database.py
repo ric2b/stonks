@@ -25,8 +25,27 @@ def init_db(db_path: Path) -> sqlite3.Connection:
             PRIMARY KEY (ticker, date)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
     conn.commit()
     return conn
+
+
+def get_setting(conn: sqlite3.Connection, key: str, default: str = "") -> str:
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        (key, value),
+    )
+    conn.commit()
 
 
 def get_watchlist(conn: sqlite3.Connection) -> list[dict]:
