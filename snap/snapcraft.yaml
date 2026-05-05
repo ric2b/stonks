@@ -1,6 +1,6 @@
 name: stonks
 base: core24
-version: '0.1.0'
+adopt-info: stonks
 summary: Desktop stock tracker for Linux
 description: |
   A desktop stock tracker application for monitoring
@@ -16,7 +16,7 @@ platforms:
 apps:
   stonks:
     command: bin/stonks
-    desktop: snap/gui/stonks.desktop
+    desktop: meta/gui/stonks.desktop
     plugs:
       - desktop
       - desktop-legacy
@@ -26,9 +26,18 @@ apps:
       - network
 
 parts:
+  desktop-file:
+    plugin: dump
+    source: snap/gui
+    organize:
+      stonks.desktop: meta/gui/stonks.desktop
+
   stonks:
     plugin: python
     source: .
+    override-pull: |
+      craftctl default
+      craftctl set version="$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
     stage-packages:
       - libegl1
       - libgl1

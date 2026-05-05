@@ -9,10 +9,6 @@ on:
     tags:
       - 'v*'
 
-#on: 
-#  release: 
-#    types: [created]
-
 jobs:
   macos:
     runs-on: macos-latest
@@ -46,7 +42,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: dist/stonks-macos.dmg
-          # token: ${{ secrets.PAT_TOKEN }}
 
   appimage:
     runs-on: ubuntu-24.04

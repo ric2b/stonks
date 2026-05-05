@@ -26,6 +26,15 @@ uv run pytest
 uv run ruff check .
 ```
 
+## Releasing
+
+```bash
+./release.sh 0.2.0
+git push && git push --tags
+```
+
+The script updates the version in `pyproject.toml`, commits, and creates a `v0.2.0` tag. Pushing the tag triggers the release workflow which builds and uploads macOS (DMG), Linux (AppImage), and Snap packages.
+
 ## License
 
 GPL-3.0
