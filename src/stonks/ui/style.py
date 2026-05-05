@@ -164,6 +164,22 @@ QLabel#chartChange {
     font-weight: 600;
     background-color: transparent;
 }
+QLabel#chartHoverDate {
+    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 158);
+    background-color: transparent;
+}
+QLabel#chartHoverPrice {
+    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 235);
+    background-color: rgba(42, 42, 42, 220);
+    border: 1px solid rgba(255, 255, 255, 36);
+    border-radius: 4px;
+    padding: 0px 5px;
+}
 QLabel#chartExchange {
     font-family: "JetBrains Mono", "Courier New", monospace;
     font-size: 11px;

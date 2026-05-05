@@ -3,6 +3,7 @@ from datetime import datetime
 
 import numpy as np
 import pyqtgraph as pg
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -17,6 +18,8 @@ from PySide6.QtWidgets import (
 from stonks.config import TIME_RANGES
 from stonks.ui.workers import HistoryWorker
 
+_DASH = Qt.PenStyle.DashLine
+
 
 class ChartWidget(QWidget):
     def __init__(self, conn: sqlite3.Connection, parent=None):
@@ -25,6 +28,7 @@ class ChartWidget(QWidget):
         self._current_ticker = None
         self._current_period = "1M"
         self._workers: list[HistoryWorker] = []
+        self._is_up = True
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -120,18 +124,44 @@ class ChartWidget(QWidget):
         self.vol_widget.setVisible(False)
         layout.addWidget(self.vol_widget)
 
-        # ── Overlay items ───────────────────────────────────
+        # ── Crosshair: vertical + horizontal lines ──────────
         self._status_label = pg.TextItem(anchor=(0.5, 0.5), color="#9e9e9e")
         self._status_label.setVisible(False)
         self.price_widget.addItem(self._status_label)
 
-        self._vline = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("#555", width=1))
+        self._vline = pg.InfiniteLine(
+            angle=90, movable=False, pen=pg.mkPen("#666", width=1, style=_DASH)
+        )
         self._vline.setVisible(False)
         self.price_widget.addItem(self._vline)
 
-        self._crosshair_label = pg.TextItem(anchor=(0, 1), color="#9e9e9e")
-        self._crosshair_label.setVisible(False)
-        self.price_widget.addItem(self._crosshair_label)
+        self._hline = pg.InfiniteLine(
+            angle=0, movable=False, pen=pg.mkPen("#666", width=1, style=_DASH)
+        )
+        self._hline.setVisible(False)
+        self.price_widget.addItem(self._hline)
+
+        # Tracking dot on the chart line
+        self._track_dot = pg.ScatterPlotItem(
+            size=9,
+            pen=pg.mkPen("#242424", width=2),
+            brush=pg.mkBrush("#4cd278"),
+        )
+        self._track_dot.setVisible(False)
+        self.price_widget.addItem(self._track_dot)
+
+        # QLabel overlays — children of price_widget so they render on top
+        self._hover_date = QLabel(self.price_widget)
+        self._hover_date.setObjectName("chartHoverDate")
+        self._hover_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._hover_date.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._hover_date.setVisible(False)
+
+        self._hover_price = QLabel(self.price_widget)
+        self._hover_price.setObjectName("chartHoverPrice")
+        self._hover_price.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._hover_price.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._hover_price.setVisible(False)
 
         self.price_widget.scene().sigMouseMoved.connect(self._on_mouse_moved)
 
@@ -173,13 +203,20 @@ class ChartWidget(QWidget):
                 btn.setChecked(True)
                 self._on_range_changed(index)
 
+    def _hide_crosshair(self):
+        self._vline.setVisible(False)
+        self._hline.setVisible(False)
+        self._track_dot.setVisible(False)
+        self._hover_date.setVisible(False)
+        self._hover_price.setVisible(False)
+
     def _show_status(self, text: str):
+        self._hide_crosshair()
         self.price_widget.clear()
         self.price_widget.addItem(self._vline)
-        self.price_widget.addItem(self._crosshair_label)
+        self.price_widget.addItem(self._hline)
+        self.price_widget.addItem(self._track_dot)
         self.price_widget.addItem(self._status_label)
-        self._vline.setVisible(False)
-        self._crosshair_label.setVisible(False)
         self._timestamps = None
         self._prices = None
 
@@ -205,7 +242,8 @@ class ChartWidget(QWidget):
         self._status_label.setVisible(False)
         self.price_widget.clear()
         self.price_widget.addItem(self._vline)
-        self.price_widget.addItem(self._crosshair_label)
+        self.price_widget.addItem(self._hline)
+        self.price_widget.addItem(self._track_dot)
         self.price_widget.addItem(self._status_label)
 
         if df.empty:
@@ -226,8 +264,8 @@ class ChartWidget(QWidget):
         self._timestamps = timestamps
         self._prices = prices
 
-        is_up = prices[-1] >= prices[0]
-        color = (76, 210, 120) if is_up else (255, 107, 122)
+        self._is_up = prices[-1] >= prices[0]
+        color = (76, 210, 120) if self._is_up else (255, 107, 122)
         pen = pg.mkPen(color=color, width=1.75)
         brush = pg.mkBrush(color=(*color, 40))
 
@@ -235,6 +273,9 @@ class ChartWidget(QWidget):
             self._timestamps, prices, pen=pen, fillLevel=float(prices.min()), brush=brush
         )
         self.price_widget.autoRange()
+
+        # Update track dot colour to match line
+        self._track_dot.setBrush(pg.mkBrush(color))
 
         current_price = prices[-1]
         change_abs = prices[-1] - prices[0]
@@ -283,8 +324,7 @@ class ChartWidget(QWidget):
 
         vb = self.price_widget.plotItem.vb
         if not vb.sceneBoundingRect().contains(pos):
-            self._vline.setVisible(False)
-            self._crosshair_label.setVisible(False)
+            self._hide_crosshair()
             return
 
         mouse_point = vb.mapSceneToView(pos)
@@ -293,11 +333,33 @@ class ChartWidget(QWidget):
         idx = int(np.searchsorted(self._timestamps, x))
         idx = max(0, min(idx, len(self._timestamps) - 1))
 
-        self._vline.setPos(float(self._timestamps[idx]))
-        self._vline.setVisible(True)
+        ts = float(self._timestamps[idx])
+        price = float(self._prices[idx])
 
-        dt = datetime.fromtimestamp(int(self._timestamps[idx]))
-        price = self._prices[idx]
-        self._crosshair_label.setText(f"{dt.strftime('%b %d, %Y')}  ${price:,.2f}")
-        self._crosshair_label.setPos(float(self._timestamps[idx]), float(price))
-        self._crosshair_label.setVisible(True)
+        # Vertical + horizontal dashed lines
+        self._vline.setPos(ts)
+        self._vline.setVisible(True)
+        self._hline.setPos(price)
+        self._hline.setVisible(True)
+
+        # Tracking dot
+        self._track_dot.setData([ts], [price])
+        self._track_dot.setVisible(True)
+
+        # Timestamp centred at top of chart
+        w = self.price_widget.width()
+        dt = datetime.fromtimestamp(int(ts))
+        self._hover_date.setGeometry(w // 2 - 90, 6, 180, 18)
+        self._hover_date.setText(dt.strftime("%b %d, %Y"))
+        self._hover_date.setVisible(True)
+        self._hover_date.raise_()
+
+        # Price label pinned to right edge at same height as tracking dot
+        scene_pos = vb.mapViewToScene(pg.Point(ts, price))
+        widget_y = self.price_widget.mapFromScene(scene_pos).y()
+        lbl_h, lbl_w = 18, 74
+        y_clamped = max(0, min(int(widget_y) - lbl_h // 2, self.price_widget.height() - lbl_h))
+        self._hover_price.setGeometry(w - lbl_w - 2, y_clamped, lbl_w, lbl_h)
+        self._hover_price.setText(f"${price:,.2f}")
+        self._hover_price.setVisible(True)
+        self._hover_price.raise_()
