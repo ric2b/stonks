@@ -270,6 +270,11 @@ class ChartWidget(QWidget):
                 btn.setChecked(True)
                 self._on_range_changed(index)
 
+    def step_range(self, delta: int):
+        labels = list(TIME_RANGES.keys())
+        current = labels.index(self._current_period)
+        self.set_range_by_index(max(0, min(current + delta, len(labels) - 1)))
+
     def shutdown(self):
         self._refresh_timer.stop()
         for w in self._workers:

@@ -139,6 +139,9 @@ class MainWindow(QMainWindow):
                 lambda idx=i: self.chart.set_range_by_index(idx),
             )
 
+        QShortcut(QKeySequence(Qt.Key.Key_Left), self, lambda: self.chart.step_range(-1))
+        QShortcut(QKeySequence(Qt.Key.Key_Right), self, lambda: self.chart.step_range(1))
+
     def _restore_session(self):
         last_period = get_setting(self.conn, "last_period", "1M")
         period_labels = list(TIME_RANGES.keys())

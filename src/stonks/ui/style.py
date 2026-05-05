@@ -124,7 +124,7 @@ QPushButton#addTickerBtn:pressed {
 
 /* ── Range tab pill container ────────────────────────── */
 QFrame#rangeTabBar {
-    background-color: #383838;
+    background-color: #1e1e1e;
     border: 1px solid rgba(255, 255, 255, 36);
     border-radius: 16px;
     padding: 3px;
