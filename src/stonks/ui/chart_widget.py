@@ -71,7 +71,7 @@ class ChartWidget(QWidget):
 
         # ── Header ─────────────────────────────────────────
         self._header = QWidget()
-        self._header.setStyleSheet("background-color: #242424;")
+        self._header.setObjectName("chartHeader")
         header_layout = QVBoxLayout(self._header)
         header_layout.setContentsMargins(24, 16, 24, 8)
         header_layout.setSpacing(2)
@@ -106,7 +106,7 @@ class ChartWidget(QWidget):
 
         # ── Range tab pill bar ──────────────────────────────
         tab_wrap = QWidget()
-        tab_wrap.setStyleSheet("background-color: #242424;")
+        tab_wrap.setObjectName("tabWrap")
         tab_wrap_layout = QHBoxLayout(tab_wrap)
         tab_wrap_layout.setContentsMargins(24, 6, 24, 10)
 

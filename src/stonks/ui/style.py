@@ -10,6 +10,13 @@ QMainWindow {
     background-color: #1e1e1e;
 }
 
+/* ── Chart area background ──────────────────────────── */
+QWidget#rightPane,
+QWidget#chartHeader,
+QWidget#tabWrap {
+    background-color: #242424;
+}
+
 /* ── Splitter ────────────────────────────────────────── */
 QSplitter::handle:horizontal {
     width: 1px;

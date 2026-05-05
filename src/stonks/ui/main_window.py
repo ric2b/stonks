@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.watchlist)
 
         right_pane = QWidget()
-        right_pane.setStyleSheet("background-color: #242424;")
+        right_pane.setObjectName("rightPane")
         right_layout = QVBoxLayout(right_pane)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
