@@ -1,22 +1,40 @@
 import logging
+import time
 
 import pandas as pd
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
+_info_cache: dict[str, tuple[dict, float]] = {}
+_history_cache: dict[tuple, tuple[pd.DataFrame, float]] = {}
+_INFO_TTL = 300.0
+_HISTORY_TTL = 60.0
+
 
 def fetch_history(ticker: str, period: str, interval: str) -> pd.DataFrame:
+    key = (ticker, period, interval)
+    now = time.monotonic()
+    cached = _history_cache.get(key)
+    if cached is not None and now - cached[1] < _HISTORY_TTL:
+        return cached[0]
     t = yf.Ticker(ticker)
     df = t.history(period=period, interval=interval)
     if df.empty:
         raise ValueError(f"No data returned for {ticker}")
+    _history_cache[key] = (df, now)
     return df
 
 
 def fetch_info(ticker: str) -> dict:
+    now = time.monotonic()
+    cached = _info_cache.get(ticker)
+    if cached is not None and now - cached[1] < _INFO_TTL:
+        return cached[0]
     t = yf.Ticker(ticker)
-    return t.info
+    result = t.info
+    _info_cache[ticker] = (result, now)
+    return result
 
 
 def search_tickers(query: str, max_results: int = 5) -> list[dict]:

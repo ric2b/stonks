@@ -3,7 +3,7 @@ from datetime import datetime
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -19,6 +19,34 @@ from stonks.config import TIME_RANGES
 from stonks.ui.workers import HistoryWorker
 
 _DASH = Qt.PenStyle.DashLine
+
+
+def _fill_closed_market_gaps(
+    timestamps: np.ndarray, prices: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Insert synthetic points to hold the previous close flat across market-closed gaps.
+
+    Any gap more than 1.5× the median interval is treated as a closure (weekends,
+    holidays). A point is inserted one second before the next open at the prior
+    close price, producing a horizontal step instead of a diagonal line.
+    """
+    if len(timestamps) < 2:
+        return timestamps, prices
+
+    diffs = np.diff(timestamps)
+    threshold = np.median(diffs) * 1.6
+
+    gap_indices = np.where(diffs > threshold)[0]
+    if len(gap_indices) == 0:
+        return timestamps, prices
+
+    new_ts = list(timestamps)
+    new_px = list(prices)
+    for i in sorted(gap_indices, reverse=True):
+        new_ts.insert(i + 1, timestamps[i + 1] - 1.0)
+        new_px.insert(i + 1, prices[i])
+
+    return np.array(new_ts), np.array(new_px)
 
 
 class ChartWidget(QWidget):
@@ -153,8 +181,8 @@ class ChartWidget(QWidget):
         self._track_dot.setVisible(False)
         self.price_widget.addItem(self._track_dot)
 
-        # QLabel overlays — children of price_widget so they render on top
-        self._hover_date = QLabel(self.price_widget)
+        # _hover_date is a child of self (ChartWidget) so it sits above the plot area
+        self._hover_date = QLabel(self)
         self._hover_date.setObjectName("chartHoverDate")
         self._hover_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._hover_date.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -268,13 +296,15 @@ class ChartWidget(QWidget):
         self._timestamps = timestamps
         self._prices = prices
 
+        plot_ts, plot_prices = _fill_closed_market_gaps(timestamps, prices)
+
         self._is_up = prices[-1] >= prices[0]
         color = (76, 210, 120) if self._is_up else (255, 107, 122)
         pen = pg.mkPen(color=color, width=1.75)
         brush = pg.mkBrush(color=(*color, 40))
 
         self.price_widget.plot(
-            self._timestamps, prices, pen=pen, fillLevel=float(prices.min()), brush=brush
+            plot_ts, plot_prices, pen=pen, fillLevel=float(plot_prices.min()), brush=brush
         )
         self.price_widget.autoRange()
 
@@ -296,7 +326,7 @@ class ChartWidget(QWidget):
         sign = "+" if change_abs >= 0 else ""
         price_color = "#4cd278" if change_abs >= 0 else "#ff6b7a"
 
-        self.price_label.setText(f"${current_price:,.2f}")
+        self.price_label.setText(f"{current_price:,.2f}")
         self.change_label.setText(
             f'<span style="color:{price_color}">{sign}{change_abs:.2f} '
             f"({sign}{change_pct:.2f}%)</span>"
@@ -359,10 +389,17 @@ class ChartWidget(QWidget):
         self._track_dot.setData([ts], [price])
         self._track_dot.setVisible(True)
 
-        # Timestamp centred at top of chart
-        w = self.price_widget.width()
+        # Timestamp centred just above the price chart (parent is self, not price_widget)
+        pw = self.price_widget
+        pw_top = pw.mapTo(self, QPoint(0, 0)).y()
+        lbl_date_w, lbl_date_h = 180, 18
         dt = datetime.fromtimestamp(int(ts))
-        self._hover_date.setGeometry(w // 2 - 90, 6, 180, 18)
+        self._hover_date.setGeometry(
+            pw.x() + pw.width() // 2 - lbl_date_w // 2,
+            pw_top - lbl_date_h - 2,
+            lbl_date_w,
+            lbl_date_h,
+        )
         self._hover_date.setText(dt.strftime("%b %d, %Y"))
         self._hover_date.setVisible(True)
         self._hover_date.raise_()
@@ -370,9 +407,9 @@ class ChartWidget(QWidget):
         # Price label pinned to right edge at same height as tracking dot
         scene_pos = vb.mapViewToScene(pg.Point(ts, price))
         widget_y = self.price_widget.mapFromScene(scene_pos).y()
-        lbl_h, lbl_w = 18, 74
+        lbl_h, lbl_w = 18, 100
         y_clamped = max(0, min(int(widget_y) - lbl_h // 2, self.price_widget.height() - lbl_h))
-        self._hover_price.setGeometry(w - lbl_w - 2, y_clamped, lbl_w, lbl_h)
-        self._hover_price.setText(f"${price:,.2f}")
+        self._hover_price.setGeometry(pw.width() - lbl_w - 2, y_clamped, lbl_w, lbl_h)
+        self._hover_price.setText(f"{price:,.2f}")
         self._hover_price.setVisible(True)
         self._hover_price.raise_()

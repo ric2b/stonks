@@ -50,7 +50,7 @@ class WatchlistItemWidget(QWidget):
         layout.addLayout(bottom)
 
     def update_price(self, price: float, change_pct: float):
-        self.price_label.setText(f"${price:,.2f}")
+        self.price_label.setText(f"{price:,.2f}")
         color = "#4cd278" if change_pct >= 0 else "#ff6b7a"
         bg_color = "rgba(76, 210, 120, 40)" if change_pct >= 0 else "rgba(255, 107, 122, 40)"
         sign = "+" if change_pct >= 0 else ""

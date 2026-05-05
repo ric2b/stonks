@@ -1,6 +1,8 @@
+import signal
 import sys
 
 import pyqtgraph as pg
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
 from stonks.config import DB_PATH
@@ -16,6 +18,12 @@ def main():
     app.setApplicationName("Stonks")
     app.setDesktopFileName("com.stonks.Stonks")
     app.setStyleSheet(DARK_STYLE)
+
+    # Restore default SIGINT so Ctrl+C works; QTimer gives Python a chance to see it.
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    sigint_timer = QTimer()
+    sigint_timer.start(200)
+    sigint_timer.timeout.connect(lambda: None)
 
     conn = init_db(DB_PATH)
     window = MainWindow(conn)
