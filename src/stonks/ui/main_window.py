@@ -1,13 +1,76 @@
 import sqlite3
+from datetime import datetime
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import QFrame, QMainWindow, QSplitter, QStatusBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
 
 from stonks.config import TIME_RANGES
 from stonks.ui.chart_widget import ChartWidget
 from stonks.ui.detail_view import DetailView
 from stonks.ui.watchlist import WatchlistWidget
+
+
+class _StatusBar(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("statusBar")
+        self.setFixedHeight(24)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 0, 12, 0)
+        layout.setSpacing(8)
+
+        dot = QLabel()
+        dot.setObjectName("liveDot")
+        dot.setFixedSize(6, 6)
+        layout.addWidget(dot, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        live = QLabel("LIVE")
+        live.setObjectName("statusText")
+        layout.addWidget(live)
+
+        self._refresh_label = QLabel()
+        self._refresh_label.setObjectName("statusText")
+        layout.addWidget(self._refresh_label)
+
+        layout.addStretch()
+
+        self._msg_label = QLabel()
+        self._msg_label.setObjectName("statusText")
+        layout.addWidget(self._msg_label)
+
+        sep = QLabel("·")
+        sep.setObjectName("statusText")
+        layout.addWidget(sep)
+
+        yf = QLabel("Yahoo Finance")
+        yf.setObjectName("statusText")
+        layout.addWidget(yf)
+
+        self._update_refresh_time()
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._update_refresh_time)
+        self._timer.start(60_000)
+
+        self._msg_timer = QTimer(self)
+        self._msg_timer.setSingleShot(True)
+        self._msg_timer.timeout.connect(lambda: self._msg_label.setText(""))
+
+    def _update_refresh_time(self):
+        now = datetime.now().strftime("%H:%M")
+        self._refresh_label.setText(f"Refreshed · {now}")
+
+    def show_message(self, text: str, ms: int = 3000):
+        self._msg_label.setText(text)
+        self._msg_timer.start(ms)
 
 
 class MainWindow(QMainWindow):
@@ -17,35 +80,39 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Stonks")
         self.setMinimumSize(900, 600)
 
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
+        central = QWidget()
+        self.setCentralWidget(central)
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self.watchlist = WatchlistWidget(conn)
         splitter.addWidget(self.watchlist)
 
-        self.right_pane = QWidget()
-        right_layout = QVBoxLayout(self.right_pane)
+        right_pane = QWidget()
+        right_pane.setStyleSheet("background-color: #242424;")
+        right_layout = QVBoxLayout(right_pane)
         right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
 
         self.chart = ChartWidget(conn)
         right_layout.addWidget(self.chart, stretch=2)
 
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        right_layout.addWidget(separator)
-
         self.detail_view = DetailView()
         right_layout.addWidget(self.detail_view, stretch=1)
 
-        splitter.addWidget(self.right_pane)
+        splitter.addWidget(right_pane)
+        splitter.setSizes([260, 640])
 
-        splitter.setSizes([250, 650])
-        self.setCentralWidget(splitter)
+        main_layout.addWidget(splitter, stretch=1)
+
+        self.status_bar = _StatusBar()
+        main_layout.addWidget(self.status_bar)
 
         self.watchlist.ticker_selected.connect(self._on_ticker_selected)
+        self.detail_view.info_received.connect(self.chart.set_company_info)
         self.watchlist.select_first()
 
         self._setup_shortcuts()
@@ -66,4 +133,4 @@ class MainWindow(QMainWindow):
     def _on_ticker_selected(self, ticker: str):
         self.chart.update_chart(ticker)
         self.detail_view.update_detail(ticker)
-        self.status_bar.showMessage(f"Loading {ticker}...", 3000)
+        self.status_bar.show_message(f"Loading {ticker}…", 3000)

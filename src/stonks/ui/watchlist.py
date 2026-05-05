@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -23,22 +24,40 @@ class WatchlistItemWidget(QWidget):
         super().__init__(parent)
         self.ticker = ticker
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 4, 8, 4)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(3)
 
-        self.ticker_label = QLabel(f"<b>{ticker}</b>")
+        top = QHBoxLayout()
+        top.setSpacing(4)
+        self.ticker_label = QLabel(ticker)
+        self.ticker_label.setObjectName("sidebarTicker")
         self.price_label = QLabel("--")
+        self.price_label.setObjectName("sidebarPrice")
         self.price_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        top.addWidget(self.ticker_label)
+        top.addStretch()
+        top.addWidget(self.price_label)
+        layout.addLayout(top)
 
-        layout.addWidget(self.ticker_label)
-        layout.addStretch()
-        layout.addWidget(self.price_label)
+        bottom = QHBoxLayout()
+        bottom.setSpacing(4)
+        self.change_label = QLabel("")
+        self.change_label.setObjectName("sidebarChange")
+        self.change_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        bottom.addStretch()
+        bottom.addWidget(self.change_label)
+        layout.addLayout(bottom)
 
     def update_price(self, price: float, change_pct: float):
-        color = "#4CAF50" if change_pct >= 0 else "#F44336"
+        self.price_label.setText(f"${price:,.2f}")
+        color = "#4cd278" if change_pct >= 0 else "#ff6b7a"
+        bg_color = "rgba(76, 210, 120, 40)" if change_pct >= 0 else "rgba(255, 107, 122, 40)"
         sign = "+" if change_pct >= 0 else ""
-        self.price_label.setText(
-            f'${price:.2f} <span style="color:{color}">{sign}{change_pct:.2f}%</span>'
+        self.change_label.setText(f"{sign}{change_pct:.2f}%")
+        self.change_label.setStyleSheet(
+            f"color: {color}; background-color: {bg_color}; "
+            "border-radius: 4px; padding: 1px 5px; font-size: 11px; font-weight: 600;"
         )
 
 
@@ -52,11 +71,26 @@ class WatchlistWidget(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
+        input_wrap = QWidget()
+        input_wrap.setStyleSheet("background-color: #1c1c1c;")
+        input_layout = QVBoxLayout(input_wrap)
+        input_layout.setContentsMargins(10, 10, 10, 6)
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Add ticker...")
         self.search_input.returnPressed.connect(self._on_add_ticker)
-        layout.addWidget(self.search_input)
+        input_layout.addWidget(self.search_input)
+        layout.addWidget(input_wrap)
+
+        header_wrap = QWidget()
+        header_wrap.setStyleSheet("background-color: #1c1c1c;")
+        header_layout = QHBoxLayout(header_wrap)
+        header_layout.setContentsMargins(12, 4, 12, 6)
+        self.header_label = QLabel("Watchlist · 0")
+        self.header_label.setObjectName("watchlistHeader")
+        header_layout.addWidget(self.header_label)
+        layout.addWidget(header_wrap)
 
         self.list_widget = QListWidget()
         self.list_widget.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
@@ -65,7 +99,17 @@ class WatchlistWidget(QWidget):
         self.list_widget.customContextMenuRequested.connect(self._on_context_menu)
         self.list_widget.currentItemChanged.connect(self._on_selection_changed)
         self.list_widget.model().rowsMoved.connect(self._on_rows_moved)
-        layout.addWidget(self.list_widget)
+        layout.addWidget(self.list_widget, 1)
+
+        add_wrap = QWidget()
+        add_wrap.setStyleSheet("background-color: #1c1c1c;")
+        add_layout = QVBoxLayout(add_wrap)
+        add_layout.setContentsMargins(10, 4, 10, 10)
+        self.add_btn = QPushButton("+ Add ticker")
+        self.add_btn.setObjectName("addTickerBtn")
+        self.add_btn.clicked.connect(self.focus_search)
+        add_layout.addWidget(self.add_btn)
+        layout.addWidget(add_wrap)
 
         self._load_watchlist()
 
@@ -74,10 +118,14 @@ class WatchlistWidget(QWidget):
         self.refresh_timer.start(REFRESH_INTERVAL_MS)
         self._refresh_prices()
 
+    def _update_count(self):
+        self.header_label.setText(f"Watchlist · {self.list_widget.count()}")
+
     def _load_watchlist(self):
         self.list_widget.clear()
         for entry in get_watchlist(self.conn):
             self._add_list_item(entry["ticker"])
+        self._update_count()
 
     def select_first(self):
         if self.list_widget.count() > 0:
@@ -109,6 +157,7 @@ class WatchlistWidget(QWidget):
         if valid:
             add_ticker(self.conn, ticker)
             self._add_list_item(ticker)
+            self._update_count()
             self.search_input.clear()
             self._refresh_prices()
         else:
@@ -129,6 +178,7 @@ class WatchlistWidget(QWidget):
             remove_ticker(self.conn, ticker)
             row = self.list_widget.row(item)
             self.list_widget.takeItem(row)
+            self._update_count()
 
     def _on_selection_changed(self, current, previous):
         if current is not None:
@@ -176,3 +226,4 @@ class WatchlistWidget(QWidget):
         ticker = item.data(Qt.ItemDataRole.UserRole)
         remove_ticker(self.conn, ticker)
         self.list_widget.takeItem(self.list_widget.row(item))
+        self._update_count()
