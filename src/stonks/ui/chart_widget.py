@@ -3,7 +3,7 @@ from datetime import datetime
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QPoint, Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -20,6 +20,20 @@ from stonks.models.database import set_setting
 from stonks.ui.workers import HistoryWorker
 
 _DASH = Qt.PenStyle.DashLine
+_DAILY_INTERVALS = {"1d", "5d", "1wk", "1mo", "3mo"}
+
+
+def _price_decimals(prices: np.ndarray) -> int:
+    spread = float(prices.max() - prices.min())
+    if spread == 0:
+        return 2
+    if spread < 0.1:
+        return 5
+    if spread < 1:
+        return 4
+    if spread < 10:
+        return 3
+    return 2
 
 
 def _fill_closed_market_gaps(
@@ -134,6 +148,13 @@ class ChartWidget(QWidget):
         tab_wrap_layout.addStretch()
         layout.addWidget(tab_wrap)
 
+        # ── Hover date slot (between tab bar and chart) ────
+        self._hover_date = QLabel()
+        self._hover_date.setObjectName("chartHoverDate")
+        self._hover_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._hover_date.setFixedHeight(18)
+        layout.addWidget(self._hover_date)
+
         # ── Price chart ─────────────────────────────────────
         date_axis = pg.DateAxisItem(orientation="bottom")
         self.price_widget = pg.PlotWidget(axisItems={"bottom": date_axis})
@@ -188,13 +209,6 @@ class ChartWidget(QWidget):
         self._track_dot.setVisible(False)
         self.price_widget.addItem(self._track_dot)
 
-        # _hover_date is a child of self (ChartWidget) so it sits above the plot area
-        self._hover_date = QLabel(self)
-        self._hover_date.setObjectName("chartHoverDate")
-        self._hover_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._hover_date.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self._hover_date.setVisible(False)
-
         self._hover_price = QLabel(self.price_widget)
         self._hover_price.setObjectName("chartHoverPrice")
         self._hover_price.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -205,6 +219,7 @@ class ChartWidget(QWidget):
 
         self._timestamps = None
         self._prices = None
+        self._price_fmt_decimals = 2
 
     def update_chart(self, ticker: str, period: str | None = None):
         ticker_changed = ticker != self._current_ticker
@@ -258,7 +273,7 @@ class ChartWidget(QWidget):
         self._vline.setVisible(False)
         self._hline.setVisible(False)
         self._track_dot.setVisible(False)
-        self._hover_date.setVisible(False)
+        self._hover_date.setText("")
         self._hover_price.setVisible(False)
 
     def _show_status(self, text: str):
@@ -326,6 +341,8 @@ class ChartWidget(QWidget):
 
         self._timestamps = timestamps
         self._prices = prices
+        self._price_fmt_decimals = _price_decimals(prices)
+        d = self._price_fmt_decimals
 
         plot_ts, plot_prices = _fill_closed_market_gaps(timestamps, prices)
 
@@ -357,9 +374,9 @@ class ChartWidget(QWidget):
         sign = "+" if change_abs >= 0 else ""
         price_color = "#4cd278" if change_abs >= 0 else "#ff6b7a"
 
-        self.price_label.setText(f"{current_price:,.2f}")
+        self.price_label.setText(f"{current_price:,.{d}f}")
         self.change_label.setText(
-            f'<span style="color:{price_color}">{sign}{change_abs:.2f} '
+            f'<span style="color:{price_color}">{sign}{change_abs:.{d}f} '
             f"({sign}{change_pct:.2f}%)</span>"
         )
 
@@ -420,27 +437,22 @@ class ChartWidget(QWidget):
         self._track_dot.setData([ts], [price])
         self._track_dot.setVisible(True)
 
-        # Timestamp centred just above the price chart (parent is self, not price_widget)
-        pw = self.price_widget
-        pw_top = pw.mapTo(self, QPoint(0, 0)).y()
-        lbl_date_w, lbl_date_h = 180, 18
         dt = datetime.fromtimestamp(int(ts))
-        self._hover_date.setGeometry(
-            pw.x() + pw.width() // 2 - lbl_date_w // 2,
-            pw_top + 4,
-            lbl_date_w,
-            lbl_date_h,
-        )
-        self._hover_date.setText(dt.strftime("%b %d, %Y"))
-        self._hover_date.setVisible(True)
-        self._hover_date.raise_()
+        _, interval = TIME_RANGES[self._current_period]
+        if interval in _DAILY_INTERVALS:
+            self._hover_date.setText(dt.strftime("%b %d, %Y"))
+        else:
+            self._hover_date.setText(dt.strftime("%b %d, %Y  %H:%M"))
+
+        pw = self.price_widget
 
         # Price label pinned to right edge at same height as tracking dot
+        d = self._price_fmt_decimals
         scene_pos = vb.mapViewToScene(pg.Point(ts, price))
         widget_y = self.price_widget.mapFromScene(scene_pos).y()
         lbl_h, lbl_w = 18, 100
         y_clamped = max(0, min(int(widget_y) - lbl_h // 2, self.price_widget.height() - lbl_h))
         self._hover_price.setGeometry(pw.width() - lbl_w - 2, y_clamped, lbl_w, lbl_h)
-        self._hover_price.setText(f"{price:,.2f}")
+        self._hover_price.setText(f"{price:,.{d}f}")
         self._hover_price.setVisible(True)
         self._hover_price.raise_()
