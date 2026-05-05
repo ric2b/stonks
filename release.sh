@@ -29,7 +29,9 @@ tmp=$(mktemp)
 sed "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml > "$tmp"
 mv "$tmp" pyproject.toml
 
-git add pyproject.toml
+uv lock
+
+git add pyproject.toml uv.lock
 git commit -m "Release v$VERSION"
 git tag "v$VERSION"
 
