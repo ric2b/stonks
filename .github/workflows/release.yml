@@ -6,6 +6,42 @@ on:
       - 'v*'
 
 jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --no-dev
+
+      - name: Generate .icns
+        run: |
+          brew install librsvg
+          mkdir Stonks.iconset
+          for size in 16 32 128 256 512; do
+            rsvg-convert -w $size -h $size assets/com.stonks.Stonks.svg > Stonks.iconset/icon_${size}x${size}.png
+            rsvg-convert -w $((size*2)) -h $((size*2)) assets/com.stonks.Stonks.svg > Stonks.iconset/icon_${size}x${size}@2x.png
+          done
+          iconutil -c icns Stonks.iconset -o stonks.icns
+
+      - name: Build .app
+        run: |
+          uv pip install pyinstaller
+          uv run pyinstaller --windowed --name Stonks --icon stonks.icns \
+            --collect-all pyqtgraph src/stonks/main.py
+
+      - name: Create DMG
+        run: |
+          hdiutil create -volname Stonks -srcfolder dist/Stonks.app \
+            -ov -format UDZO dist/stonks-macos.dmg
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/stonks-macos.dmg
+
   flatpak:
     runs-on: ubuntu-latest
     steps:
