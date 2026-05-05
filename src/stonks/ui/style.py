@@ -211,6 +211,44 @@ QFrame#separator {
     min-height: 1px;
 }
 
+/* ── Search results list ─────────────────────────────── */
+QListWidget#searchResults {
+    background-color: #2a2a2a;
+    border: 1px solid rgba(255, 255, 255, 36);
+    border-radius: 8px;
+    outline: none;
+    padding: 3px;
+}
+QListWidget#searchResults::item {
+    border-radius: 6px;
+    padding: 0px;
+    margin: 1px 0px;
+}
+QListWidget#searchResults::item:hover {
+    background-color: rgba(255, 255, 255, 13);
+}
+QListWidget#searchResults::item:selected {
+    background-color: rgba(255, 255, 255, 20);
+}
+QLabel#searchResultSymbol {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 235);
+    background-color: transparent;
+}
+QLabel#searchResultName {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 158);
+    background-color: transparent;
+}
+QLabel#searchResultExchange {
+    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 107);
+    background-color: transparent;
+    letter-spacing: 0.3px;
+}
+
 /* ── Scrollbars ──────────────────────────────────────── */
 QScrollBar:vertical {
     background-color: transparent;

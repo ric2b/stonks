@@ -2,7 +2,7 @@ import logging
 
 from PySide6.QtCore import QThread, Signal
 
-from stonks.services.stock_data import fetch_history, fetch_info, validate_ticker
+from stonks.services.stock_data import fetch_history, fetch_info, search_tickers, validate_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,22 @@ class InfoWorker(QThread):
         try:
             info = fetch_info(self.ticker)
             self.finished.emit(info)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class SearchWorker(QThread):
+    finished = Signal(list)
+    error = Signal(str)
+
+    def __init__(self, query: str):
+        super().__init__()
+        self.query = query
+
+    def run(self):
+        try:
+            results = search_tickers(self.query)
+            self.finished.emit(results)
         except Exception as e:
             self.error.emit(str(e))
 
