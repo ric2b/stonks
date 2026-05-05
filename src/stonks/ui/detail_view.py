@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from stonks.services.stock_data import currency_format
 from stonks.ui.workers import InfoWorker
 
 STAT_COLUMNS = [
@@ -33,7 +34,7 @@ STAT_COLUMNS = [
 ]
 
 
-def format_number(value, fmt_type: str) -> str:
+def format_number(value, fmt_type: str, prefix: str = "", suffix: str = "") -> str:
     if value is None:
         return "--"
     try:
@@ -42,7 +43,7 @@ def format_number(value, fmt_type: str) -> str:
         return "--"
 
     if fmt_type == "currency":
-        return f"{value:,.2f}"
+        return f"{prefix}{value:,.2f}{suffix}"
     elif fmt_type == "percent":
         return f"{value * 100:.2f}%"
     elif fmt_type == "decimal":
@@ -57,14 +58,14 @@ def format_number(value, fmt_type: str) -> str:
         return f"{value:,.0f}"
     elif fmt_type == "large_number":
         if value >= 1_000_000_000_000:
-            return f"{value / 1_000_000_000_000:.2f}T"
+            return f"{prefix}{value / 1_000_000_000_000:.2f}T{suffix}"
         elif value >= 1_000_000_000:
-            return f"{value / 1_000_000_000:.2f}B"
+            return f"{prefix}{value / 1_000_000_000:.2f}B{suffix}"
         elif value >= 1_000_000:
-            return f"{value / 1_000_000:.1f}M"
+            return f"{prefix}{value / 1_000_000:.1f}M{suffix}"
         elif value >= 1_000:
-            return f"{value / 1_000:.1f}K"
-        return f"{value:,.0f}"
+            return f"{prefix}{value / 1_000:.1f}K{suffix}"
+        return f"{prefix}{value:,.0f}{suffix}"
     return str(value)
 
 
@@ -162,13 +163,18 @@ class DetailView(QWidget):
         if ticker != self._current_ticker:
             return
 
+        currency_code = info.get("currency") or ""
+        pre, suf = currency_format(currency_code)
+
         for col_stats in STAT_COLUMNS:
             for _, key, fmt_type in col_stats:
                 value = info.get(key)
                 if key in self._value_labels:
-                    self._value_labels[key].setText(format_number(value, fmt_type))
+                    if fmt_type in ("currency", "large_number"):
+                        self._value_labels[key].setText(format_number(value, fmt_type, pre, suf))
+                    else:
+                        self._value_labels[key].setText(format_number(value, fmt_type))
 
         name = info.get("longName") or info.get("shortName") or ticker
         exchange = info.get("fullExchangeName") or info.get("exchange") or ""
-        currency = info.get("currency") or ""
-        self.info_received.emit(ticker, name, exchange, currency)
+        self.info_received.emit(ticker, name, exchange, currency_code)

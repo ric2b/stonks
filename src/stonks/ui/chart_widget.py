@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from stonks.config import INTRADAY_INTERVALS, TIME_RANGES
 from stonks.models.database import set_setting
+from stonks.services.stock_data import currency_format
 from stonks.ui.workers import HistoryWorker
 
 _DASH = Qt.PenStyle.DashLine
@@ -220,6 +221,8 @@ class ChartWidget(QWidget):
         self._timestamps = None
         self._prices = None
         self._price_fmt_decimals = 2
+        self._currency_prefix = ""
+        self._currency_suffix = ""
 
     def update_chart(self, ticker: str, period: str | None = None):
         ticker_changed = ticker != self._current_ticker
@@ -231,6 +234,8 @@ class ChartWidget(QWidget):
         if ticker_changed:
             self.company_label.setText("")
             self.exchange_label.setText("")
+            self._currency_prefix = ""
+            self._currency_suffix = ""
         self.price_label.setText("--")
         self.change_label.setText("")
         self._show_status("Loading...")
@@ -253,6 +258,9 @@ class ChartWidget(QWidget):
             return
         self.company_label.setText(name)
         self.exchange_label.setText(f"{exchange} · {currency}")
+        self._currency_prefix, self._currency_suffix = currency_format(currency)
+        if self._prices is not None and len(self._prices) > 0:
+            self._update_price_display()
 
     def set_range_by_index(self, index: int):
         labels = list(TIME_RANGES.keys())
@@ -313,6 +321,26 @@ class ChartWidget(QWidget):
         if self._current_ticker:
             self.update_chart(self._current_ticker)
 
+    def _update_price_display(self):
+        if self._prices is None or len(self._prices) == 0:
+            return
+        d = self._price_fmt_decimals
+        pre = self._currency_prefix
+        suf = self._currency_suffix
+        current_price = float(self._prices[-1])
+        change_abs = float(self._prices[-1] - self._prices[0])
+        change_pct = (change_abs / float(self._prices[0])) * 100
+        sign = "+" if change_abs >= 0 else "−"
+        abs_change = abs(change_abs)
+        abs_pct = abs(change_pct)
+        price_color = "#4cd278" if change_abs >= 0 else "#ff6b7a"
+
+        self.price_label.setText(f"{pre}{current_price:,.{d}f}{suf}")
+        self.change_label.setText(
+            f'<span style="color:{price_color}">{sign}{pre}{abs_change:.{d}f}{suf} '
+            f"({sign}{abs_pct:.2f}%)</span>"
+        )
+
     def _on_data_received(self, df, ticker: str):
         if ticker != self._current_ticker:
             return
@@ -342,7 +370,6 @@ class ChartWidget(QWidget):
         self._timestamps = timestamps
         self._prices = prices
         self._price_fmt_decimals = _price_decimals(prices)
-        d = self._price_fmt_decimals
 
         plot_ts, plot_prices = _fill_closed_market_gaps(timestamps, prices)
 
@@ -368,17 +395,7 @@ class ChartWidget(QWidget):
         # Update track dot colour to match line
         self._track_dot.setBrush(pg.mkBrush(color))
 
-        current_price = prices[-1]
-        change_abs = prices[-1] - prices[0]
-        change_pct = (change_abs / prices[0]) * 100
-        sign = "+" if change_abs >= 0 else ""
-        price_color = "#4cd278" if change_abs >= 0 else "#ff6b7a"
-
-        self.price_label.setText(f"{current_price:,.{d}f}")
-        self.change_label.setText(
-            f'<span style="color:{price_color}">{sign}{change_abs:.{d}f} '
-            f"({sign}{change_pct:.2f}%)</span>"
-        )
+        self._update_price_display()
 
         # Volume bars
         if "Volume" in df.columns:
@@ -453,6 +470,6 @@ class ChartWidget(QWidget):
         lbl_h, lbl_w = 18, 100
         y_clamped = max(0, min(int(widget_y) - lbl_h // 2, self.price_widget.height() - lbl_h))
         self._hover_price.setGeometry(pw.width() - lbl_w - 2, y_clamped, lbl_w, lbl_h)
-        self._hover_price.setText(f"{price:,.{d}f}")
+        self._hover_price.setText(f"{self._currency_prefix}{price:,.{d}f}{self._currency_suffix}")
         self._hover_price.setVisible(True)
         self._hover_price.raise_()

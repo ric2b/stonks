@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from stonks.config import REFRESH_INTERVAL_MS
 from stonks.models.database import add_ticker, get_watchlist, remove_ticker, reorder_watchlist
+from stonks.services.stock_data import currency_format
 from stonks.ui.workers import NameFetchWorker, PriceUpdateWorker, SearchWorker, ValidateWorker
 
 
@@ -23,6 +24,10 @@ class WatchlistItemWidget(QWidget):
     def __init__(self, ticker: str, parent=None):
         super().__init__(parent)
         self.ticker = ticker
+        self._currency_prefix = ""
+        self._currency_suffix = ""
+        self._last_price = None
+        self._last_change_pct = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -51,8 +56,16 @@ class WatchlistItemWidget(QWidget):
         bottom.addWidget(self.change_label)
         layout.addLayout(bottom)
 
+    def set_currency(self, prefix: str, suffix: str):
+        self._currency_prefix = prefix
+        self._currency_suffix = suffix
+        if self._last_price is not None:
+            self.update_price(self._last_price, self._last_change_pct)
+
     def update_price(self, price: float, change_pct: float):
-        self.price_label.setText(f"{price:,.2f}")
+        self._last_price = price
+        self._last_change_pct = change_pct
+        self.price_label.setText(f"{self._currency_prefix}{price:,.2f}{self._currency_suffix}")
         color = "#4cd278" if change_pct >= 0 else "#ff6b7a"
         bg_color = "rgba(76, 210, 120, 40)" if change_pct >= 0 else "rgba(255, 107, 122, 40)"
         sign = "+" if change_pct >= 0 else ""
@@ -345,17 +358,21 @@ class WatchlistWidget(QWidget):
             return
         worker = NameFetchWorker(tickers)
         worker.finished.connect(self._on_names_fetched)
-        worker.finished.connect(lambda _n, w=worker: self._workers.remove(w))
+        worker.finished.connect(lambda _n, _c, w=worker: self._workers.remove(w))
         self._workers.append(worker)
         worker.start()
 
-    def _on_names_fetched(self, names: dict):
+    def _on_names_fetched(self, names: dict, currencies: dict):
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             ticker = item.data(Qt.ItemDataRole.UserRole)
             widget = self.list_widget.itemWidget(item)
-            if ticker in names and widget is not None:
-                widget.name_label.setText(names[ticker])
+            if widget is not None:
+                if ticker in names:
+                    widget.name_label.setText(names[ticker])
+                if ticker in currencies:
+                    pre, suf = currency_format(currencies[ticker])
+                    widget.set_currency(pre, suf)
 
     def update_name(self, ticker: str, name: str):
         for i in range(self.list_widget.count()):
@@ -364,6 +381,16 @@ class WatchlistWidget(QWidget):
                 widget = self.list_widget.itemWidget(item)
                 if widget is not None:
                     widget.name_label.setText(name)
+                break
+
+    def update_currency(self, ticker: str, currency_code: str):
+        pre, suf = currency_format(currency_code)
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == ticker:
+                widget = self.list_widget.itemWidget(item)
+                if widget is not None:
+                    widget.set_currency(pre, suf)
                 break
 
     def _refresh_prices(self):

@@ -5,6 +5,7 @@ import pytest
 
 from stonks.services.stock_data import (
     batch_fetch_history,
+    currency_format,
     fetch_history,
     fetch_info,
     populate_history_cache,
@@ -187,3 +188,25 @@ def test_validate_ticker_invalid(mock_ticker_cls):
 def test_validate_ticker_exception_returns_false(mock_ticker_cls):
     mock_ticker_cls.side_effect = Exception("Network error")
     assert validate_ticker("AAPL") is False
+
+
+# ── currency_format ──────────────────────────────────────────────────────────
+
+
+def test_currency_format_prefix_currencies():
+    assert currency_format("USD") == ("$", "")
+    assert currency_format("GBP") == ("£", "")
+    assert currency_format("JPY") == ("¥", "")
+    assert currency_format("HKD") == ("HK$", "")
+
+
+def test_currency_format_suffix_currencies():
+    assert currency_format("EUR") == ("", "€")
+    assert currency_format("SEK") == ("", "kr")
+    assert currency_format("DKK") == ("", "kr")
+
+
+def test_currency_format_unknown_returns_empty():
+    assert currency_format("XYZ") == ("", "")
+    assert currency_format("") == ("", "")
+    assert currency_format("GBp") == ("", "")

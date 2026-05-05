@@ -176,6 +176,7 @@ class MainWindow(QMainWindow):
 
     def _on_info_received(self, ticker: str, name: str, exchange: str, currency: str):
         self.watchlist.update_name(ticker, name)
+        self.watchlist.update_currency(ticker, currency)
 
     def _on_ticker_selected(self, ticker: str):
         set_setting(self.conn, "last_ticker", ticker)

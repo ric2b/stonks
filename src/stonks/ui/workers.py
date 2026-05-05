@@ -4,6 +4,7 @@ from PySide6.QtCore import QThread, Signal
 
 from stonks.services.stock_data import (
     batch_fetch_history,
+    fetch_currencies,
     fetch_info,
     fetch_names,
     populate_history_cache,
@@ -92,7 +93,7 @@ class PriceUpdateWorker(QThread):
 
     def run(self):
         try:
-            batch = batch_fetch_history(self.tickers, "2d", "1d")
+            batch = batch_fetch_history(self.tickers, "5d", "1d")
         except Exception as e:
             logger.debug("Batch price fetch failed: %s", e)
             batch = {}
@@ -103,7 +104,7 @@ class PriceUpdateWorker(QThread):
                 df = batch.get(ticker)
                 if df is None or df.empty:
                     continue
-                close = df["Close"]
+                close = df["Close"].dropna()
                 if len(close) >= 2:
                     price = float(close.iloc[-1])
                     prev = float(close.iloc[-2])
@@ -121,7 +122,7 @@ class PriceUpdateWorker(QThread):
 
 
 class NameFetchWorker(QThread):
-    finished = Signal(dict)
+    finished = Signal(dict, dict)
 
     def __init__(self, tickers: list[str]):
         super().__init__()
@@ -130,7 +131,8 @@ class NameFetchWorker(QThread):
     def run(self):
         try:
             names = fetch_names(self.tickers)
-            self.finished.emit(names)
+            currencies = fetch_currencies(self.tickers)
+            self.finished.emit(names, currencies)
         except Exception as e:
             logger.debug("Name fetch failed: %s", e)
 

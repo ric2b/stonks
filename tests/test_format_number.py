@@ -17,6 +17,16 @@ def test_currency():
     assert format_number(0, "currency") == "0.00"
 
 
+def test_currency_with_prefix():
+    assert format_number(1234.5, "currency", prefix="$") == "$1,234.50"
+    assert format_number(0, "currency", prefix="£") == "£0.00"
+
+
+def test_currency_with_suffix():
+    assert format_number(1234.5, "currency", suffix="€") == "1,234.50€"
+    assert format_number(0, "currency", suffix="kr") == "0.00kr"
+
+
 def test_percent():
     assert format_number(0.05, "percent") == "5.00%"
     assert format_number(0, "percent") == "0.00%"
@@ -44,6 +54,16 @@ def test_number_billions():
 
 def test_large_number_billions():
     assert format_number(3_100_000_000_000, "large_number") == "3.10T"
+
+
+def test_large_number_with_prefix():
+    assert format_number(3_100_000_000_000, "large_number", prefix="$") == "$3.10T"
+    assert format_number(2_500_000_000, "large_number", prefix="£") == "£2.50B"
+
+
+def test_large_number_with_suffix():
+    assert format_number(3_100_000_000_000, "large_number", suffix="€") == "3.10T€"
+    assert format_number(2_500_000, "large_number", suffix="€") == "2.5M€"
 
 
 def test_large_number_millions():
