@@ -2,7 +2,9 @@
 
 <img src="assets/com.stonks.Stonks.svg" width="96" alt="Stonks icon"/>
 
-Desktop stock tracker for Linux, inspired by the macOS Stocks app.
+Desktop stock tracker for Linux.
+
+<img width="902" height="776" alt="image" src="https://github.com/user-attachments/assets/d8ef0c6a-7d26-4cef-85fb-54b87eb90827" />
 
 ## Features
 
