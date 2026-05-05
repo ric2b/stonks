@@ -110,6 +110,9 @@ class ChartWidget(QWidget):
         self.price_widget.getAxis("bottom").setTextPen(pg.mkPen("#6b6b6b"))
         self.price_widget.getAxis("left").setPen(pg.mkPen("#303030"))
         self.price_widget.getAxis("bottom").setPen(pg.mkPen("#303030"))
+        # Only allow horizontal zoom/pan; y auto-scales to visible x data
+        self.price_widget.setMouseEnabled(x=True, y=False)
+        self.price_widget.plotItem.vb.setAutoVisible(y=True)
         layout.addWidget(self.price_widget, stretch=1)
 
         # ── Volume chart ────────────────────────────────────
@@ -217,6 +220,7 @@ class ChartWidget(QWidget):
         self.price_widget.addItem(self._hline)
         self.price_widget.addItem(self._track_dot)
         self.price_widget.addItem(self._status_label)
+        self.price_widget.plotItem.vb.setLimits(xMin=None, xMax=None, maxXRange=None)
         self._timestamps = None
         self._prices = None
 
@@ -273,6 +277,15 @@ class ChartWidget(QWidget):
             self._timestamps, prices, pen=pen, fillLevel=float(prices.min()), brush=brush
         )
         self.price_widget.autoRange()
+
+        # Constrain x zoom-out to the data extent
+        x_span = float(timestamps[-1]) - float(timestamps[0])
+        buf = x_span * 0.01
+        self.price_widget.plotItem.vb.setLimits(
+            xMin=float(timestamps[0]) - buf,
+            xMax=float(timestamps[-1]) + buf,
+            maxXRange=x_span + buf * 2,
+        )
 
         # Update track dot colour to match line
         self._track_dot.setBrush(pg.mkBrush(color))
