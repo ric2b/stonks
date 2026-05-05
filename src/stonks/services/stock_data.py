@@ -74,6 +74,14 @@ def populate_history_cache(results: dict[str, pd.DataFrame], period: str, interv
         _history_cache[(ticker, period, interval)] = (df, now)
 
 
+def is_history_cached(ticker: str, period: str, interval: str) -> bool:
+    key = (ticker, period, interval)
+    cached = _history_cache.get(key)
+    if cached is None:
+        return False
+    return time.monotonic() - cached[1] < _HISTORY_TTL
+
+
 def _evict_history_cache(now: float) -> None:
     stale = [k for k, (_, t) in _history_cache.items() if now - t >= _HISTORY_TTL]
     for k in stale:

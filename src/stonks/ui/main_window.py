@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from stonks.config import TIME_RANGES
 from stonks.models.database import get_setting, set_setting
+from stonks.services.stock_data import is_history_cached
 from stonks.ui.chart_widget import ChartWidget
 from stonks.ui.detail_view import DetailView
 from stonks.ui.watchlist import WatchlistWidget
@@ -180,4 +181,6 @@ class MainWindow(QMainWindow):
         set_setting(self.conn, "last_ticker", ticker)
         self.chart.update_chart(ticker)
         self.detail_view.update_detail(ticker)
-        self.status_bar.show_message(f"Loading {ticker}…", 3000)
+        yf_period, yf_interval = TIME_RANGES[self.chart._current_period]
+        if not is_history_cached(ticker, yf_period, yf_interval):
+            self.status_bar.show_message(f"Loading {ticker}…", 3000)
