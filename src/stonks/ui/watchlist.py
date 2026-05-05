@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from stonks.config import REFRESH_INTERVAL_MS
 from stonks.models.database import add_ticker, get_watchlist, remove_ticker, reorder_watchlist
-from stonks.ui.workers import PriceUpdateWorker, SearchWorker, ValidateWorker
+from stonks.ui.workers import NameFetchWorker, PriceUpdateWorker, SearchWorker, ValidateWorker
 
 
 class WatchlistItemWidget(QWidget):
@@ -42,10 +42,12 @@ class WatchlistItemWidget(QWidget):
 
         bottom = QHBoxLayout()
         bottom.setSpacing(4)
+        self.name_label = QLabel("")
+        self.name_label.setObjectName("sidebarName")
         self.change_label = QLabel("")
         self.change_label.setObjectName("sidebarChange")
         self.change_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        bottom.addStretch()
+        bottom.addWidget(self.name_label, 1)
         bottom.addWidget(self.change_label)
         layout.addLayout(bottom)
 
@@ -151,6 +153,7 @@ class WatchlistWidget(QWidget):
         self.refresh_timer.timeout.connect(self._refresh_prices)
         self.refresh_timer.start(REFRESH_INTERVAL_MS)
         self._refresh_prices()
+        self._fetch_names()
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.KeyPress:
@@ -335,6 +338,33 @@ class WatchlistWidget(QWidget):
             item = self.list_widget.item(i)
             tickers.append(item.data(Qt.ItemDataRole.UserRole))
         reorder_watchlist(self.conn, tickers)
+
+    def _fetch_names(self):
+        tickers = self.get_tickers()
+        if not tickers:
+            return
+        worker = NameFetchWorker(tickers)
+        worker.finished.connect(self._on_names_fetched)
+        worker.finished.connect(lambda _n, w=worker: self._workers.remove(w))
+        self._workers.append(worker)
+        worker.start()
+
+    def _on_names_fetched(self, names: dict):
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            ticker = item.data(Qt.ItemDataRole.UserRole)
+            widget = self.list_widget.itemWidget(item)
+            if ticker in names and widget is not None:
+                widget.name_label.setText(names[ticker])
+
+    def update_name(self, ticker: str, name: str):
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == ticker:
+                widget = self.list_widget.itemWidget(item)
+                if widget is not None:
+                    widget.name_label.setText(name)
+                break
 
     def _refresh_prices(self):
         tickers = []

@@ -5,6 +5,7 @@ from PySide6.QtCore import QThread, Signal
 from stonks.services.stock_data import (
     batch_fetch_history,
     fetch_info,
+    fetch_names,
     populate_history_cache,
     search_tickers,
     validate_ticker,
@@ -117,6 +118,21 @@ class PriceUpdateWorker(QThread):
                 logger.debug("Failed to process price for %s", ticker)
 
         self.finished.emit(results)
+
+
+class NameFetchWorker(QThread):
+    finished = Signal(dict)
+
+    def __init__(self, tickers: list[str]):
+        super().__init__()
+        self.tickers = tickers
+
+    def run(self):
+        try:
+            names = fetch_names(self.tickers)
+            self.finished.emit(names)
+        except Exception as e:
+            logger.debug("Name fetch failed: %s", e)
 
 
 class PrefetchWorker(QThread):

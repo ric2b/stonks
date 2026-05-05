@@ -80,6 +80,26 @@ def _evict_history_cache(now: float) -> None:
         del _history_cache[k]
 
 
+_name_cache: dict[str, str] = {}
+
+
+def fetch_names(tickers: list[str]) -> dict[str, str]:
+    results = {}
+    for ticker in tickers:
+        if ticker in _name_cache:
+            results[ticker] = _name_cache[ticker]
+            continue
+        try:
+            info = fetch_info(ticker)
+            name = info.get("longName") or info.get("shortName") or ""
+            if name:
+                _name_cache[ticker] = name
+                results[ticker] = name
+        except Exception:
+            pass
+    return results
+
+
 def search_tickers(query: str, max_results: int = 5) -> list[dict]:
     results = yf.Search(query, max_results=max_results)
     out = []

@@ -207,15 +207,17 @@ class ChartWidget(QWidget):
         self._prices = None
 
     def update_chart(self, ticker: str, period: str | None = None):
+        ticker_changed = ticker != self._current_ticker
         self._current_ticker = ticker
         if period is not None:
             self._current_period = period
 
         self.symbol_label.setText(ticker)
-        self.company_label.setText("")
+        if ticker_changed:
+            self.company_label.setText("")
+            self.exchange_label.setText("")
         self.price_label.setText("--")
         self.change_label.setText("")
-        self.exchange_label.setText("")
         self._show_status("Loading...")
 
         yf_period, yf_interval = TIME_RANGES[self._current_period]

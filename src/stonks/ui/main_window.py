@@ -117,6 +117,7 @@ class MainWindow(QMainWindow):
 
         self.watchlist.ticker_selected.connect(self._on_ticker_selected)
         self.detail_view.info_received.connect(self.chart.set_company_info)
+        self.detail_view.info_received.connect(self._on_info_received)
         self.chart.range_changed.connect(self._on_chart_range_changed)
 
         self._restore_session()
@@ -171,6 +172,9 @@ class MainWindow(QMainWindow):
             w.quit()
             w.wait(2000)
         super().closeEvent(event)
+
+    def _on_info_received(self, ticker: str, name: str, exchange: str, currency: str):
+        self.watchlist.update_name(ticker, name)
 
     def _on_ticker_selected(self, ticker: str):
         set_setting(self.conn, "last_ticker", ticker)

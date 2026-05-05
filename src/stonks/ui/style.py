@@ -85,6 +85,11 @@ QLabel#sidebarPrice {
     color: rgba(255, 255, 255, 235);
     background-color: transparent;
 }
+QLabel#sidebarName {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 158);
+    background-color: transparent;
+}
 QLabel#sidebarChange {
     font-family: "JetBrains Mono", "Courier New", monospace;
     font-size: 11px;
