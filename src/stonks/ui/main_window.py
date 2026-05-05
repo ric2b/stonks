@@ -122,6 +122,8 @@ class MainWindow(QMainWindow):
         self._restore_session()
         self._setup_shortcuts()
 
+        self.watchlist.list_widget.setFocus()
+
     def _setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+N"), self, self.watchlist.focus_search)
         QShortcut(QKeySequence("/"), self, self.watchlist.focus_search)
