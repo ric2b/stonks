@@ -158,7 +158,6 @@ class MainWindow(QMainWindow):
             return
         worker = PrefetchWorker(tickers, yf_period, yf_interval)
         worker.finished.connect(lambda w=worker: self._workers.remove(w))
-        worker.error.connect(lambda _e, w=worker: self._workers.remove(w))
         self._workers.append(worker)
         worker.start()
 

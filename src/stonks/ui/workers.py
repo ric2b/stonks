@@ -120,8 +120,8 @@ class PriceUpdateWorker(QThread):
 
 
 class PrefetchWorker(QThread):
-    finished = Signal()
-    error = Signal(str)
+    # No custom finished signal — QThread.finished fires exactly once when run()
+    # returns, avoiding the double-emit that occurs when shadowing it with Signal().
 
     def __init__(self, tickers: list[str], period: str, interval: str):
         super().__init__()
@@ -133,7 +133,5 @@ class PrefetchWorker(QThread):
         try:
             results = batch_fetch_history(self.tickers, self.period, self.interval)
             populate_history_cache(results, self.period, self.interval)
-            self.finished.emit()
         except Exception as e:
             logger.debug("Prefetch failed: %s", e)
-            self.error.emit(str(e))
