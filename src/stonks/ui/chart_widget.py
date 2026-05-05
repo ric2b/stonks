@@ -3,7 +3,7 @@ from datetime import datetime
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QPoint, Qt, QTimer
+from PySide6.QtCore import QPoint, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -51,6 +51,8 @@ def _fill_closed_market_gaps(
 
 
 class ChartWidget(QWidget):
+    range_changed = Signal(str)  # period label, e.g. "1M"
+
     def __init__(self, conn: sqlite3.Connection, parent=None):
         super().__init__(parent)
         self.conn = conn
@@ -243,6 +245,13 @@ class ChartWidget(QWidget):
                 btn.setChecked(True)
                 self._on_range_changed(index)
 
+    def shutdown(self):
+        self._refresh_timer.stop()
+        for w in self._workers:
+            w.quit()
+            w.wait(2000)
+        self._workers.clear()
+
     def _hide_crosshair(self):
         self._vline.setVisible(False)
         self._hline.setVisible(False)
@@ -279,6 +288,7 @@ class ChartWidget(QWidget):
             self._refresh_timer.start()
         else:
             self._refresh_timer.stop()
+        self.range_changed.emit(self._current_period)
         if self._current_ticker:
             self.update_chart(self._current_ticker)
 

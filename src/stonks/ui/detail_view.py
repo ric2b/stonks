@@ -42,7 +42,7 @@ def format_number(value, fmt_type: str) -> str:
         return "--"
 
     if fmt_type == "currency":
-        return f"${value:,.2f}"
+        return f"{value:,.2f}"
     elif fmt_type == "percent":
         return f"{value * 100:.2f}%"
     elif fmt_type == "decimal":
@@ -57,9 +57,9 @@ def format_number(value, fmt_type: str) -> str:
         return f"{value:,.0f}"
     elif fmt_type == "large_number":
         if value >= 1_000_000_000_000:
-            return f"${value / 1_000_000_000_000:.2f}T"
+            return f"{value / 1_000_000_000_000:.2f}T"
         elif value >= 1_000_000_000:
-            return f"${value / 1_000_000_000:.2f}B"
+            return f"{value / 1_000_000_000:.2f}B"
         elif value >= 1_000_000:
             return f"{value / 1_000_000:.1f}M"
         elif value >= 1_000:
@@ -139,6 +139,12 @@ class DetailView(QWidget):
             cols_layout.addWidget(col, 1)
 
         outer.addWidget(cols_widget, 1)
+
+    def shutdown(self):
+        for w in self._workers:
+            w.quit()
+            w.wait(2000)
+        self._workers.clear()
 
     def update_detail(self, ticker: str):
         self._current_ticker = ticker

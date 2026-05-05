@@ -17,6 +17,7 @@ from stonks.models.database import get_setting, set_setting
 from stonks.ui.chart_widget import ChartWidget
 from stonks.ui.detail_view import DetailView
 from stonks.ui.watchlist import WatchlistWidget
+from stonks.ui.workers import PrefetchWorker
 
 
 class _StatusBar(QWidget):
@@ -112,8 +113,11 @@ class MainWindow(QMainWindow):
         self.status_bar = _StatusBar()
         main_layout.addWidget(self.status_bar)
 
+        self._workers: list[PrefetchWorker] = []
+
         self.watchlist.ticker_selected.connect(self._on_ticker_selected)
         self.detail_view.info_received.connect(self.chart.set_company_info)
+        self.chart.range_changed.connect(self._on_chart_range_changed)
 
         self._restore_session()
         self._setup_shortcuts()
@@ -140,6 +144,32 @@ class MainWindow(QMainWindow):
         last_ticker = get_setting(self.conn, "last_ticker", "")
         if not self.watchlist.select_ticker(last_ticker):
             self.watchlist.select_first()
+
+        yf_period, yf_interval = TIME_RANGES[self.chart._current_period]
+        self._start_prefetch(yf_period, yf_interval)
+
+    def _on_chart_range_changed(self, period_label: str):
+        yf_period, yf_interval = TIME_RANGES[period_label]
+        self._start_prefetch(yf_period, yf_interval)
+
+    def _start_prefetch(self, yf_period: str, yf_interval: str):
+        tickers = self.watchlist.get_tickers()
+        if not tickers:
+            return
+        worker = PrefetchWorker(tickers, yf_period, yf_interval)
+        worker.finished.connect(lambda w=worker: self._workers.remove(w))
+        worker.error.connect(lambda _e, w=worker: self._workers.remove(w))
+        self._workers.append(worker)
+        worker.start()
+
+    def closeEvent(self, event):
+        self.watchlist.shutdown()
+        self.chart.shutdown()
+        self.detail_view.shutdown()
+        for w in self._workers:
+            w.quit()
+            w.wait(2000)
+        super().closeEvent(event)
 
     def _on_ticker_selected(self, ticker: str):
         set_setting(self.conn, "last_ticker", ticker)

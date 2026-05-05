@@ -21,4 +21,4 @@ TIME_RANGES = {
     "ALL": ("max", "1mo"),
 }
 
-INTRADAY_INTERVALS = {"5m", "30m", "1h"}
+INTRADAY_INTERVALS = {"5m", "30m"}

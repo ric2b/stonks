@@ -23,16 +23,15 @@ GPL-3.0 · Python 3.14 · PySide6 · PyQtGraph · yfinance · SQLite
 ```
 src/stonks/
 ├── main.py                  Entry point: QApplication, SIGINT handler, MainWindow
-├── config.py                Constants: DB path, TIME_RANGES, refresh interval
+├── config.py                Constants: DB path, TIME_RANGES, INTRADAY_INTERVALS
 ├── models/
 │   └── database.py          SQLite schema + CRUD helpers
 ├── services/
-│   ├── stock_data.py        yfinance wrappers with in-memory TTL cache
-│   └── cache.py             SQLite OHLCV cache helpers (not yet wired to chart)
+│   └── stock_data.py        yfinance wrappers with in-memory TTL cache + batch fetch
 └── ui/
-    ├── main_window.py       Top-level window: splitter, status bar, shortcuts, session restore
+    ├── main_window.py       Top-level window: splitter, status bar, shortcuts, session restore, prefetch
     ├── watchlist.py         Left sidebar: live search, price refresh, drag-reorder
-    ├── chart_widget.py      Price + volume chart, range tabs, crosshair
+    ├── chart_widget.py      Price + volume chart, range tabs, crosshair, auto-refresh
     ├── detail_view.py       Stats grid (Open / High / Low / Vol / P/E / Mkt Cap / …)
     ├── workers.py           QThread workers for all network calls
     └── style.py             Adwaita dark QSS stylesheet
@@ -56,11 +55,15 @@ MainWindow
 
 1. **Ticker selection** — `WatchlistWidget` emits `ticker_selected(str)`.
 2. **MainWindow** receives it, saves `last_ticker` to the settings table, then fans out to:
-   - `ChartWidget.update_chart(ticker)` — spawns a `HistoryWorker`
-   - `DetailView.update_detail(ticker)` — spawns an `InfoWorker`
+   - `ChartWidget.update_chart(ticker)` — spawns a `HistoryWorker` (usually hits the in-memory cache)
+   - `DetailView.update_detail(ticker)` — spawns an `InfoWorker` (usually hits the in-memory cache)
 3. **Workers** run in `QThread`, call yfinance, and emit a signal back on the main thread.  
    All workers are kept in a `_workers: list` on their parent widget to prevent garbage collection mid-run.
 4. **Company info round-trip** — once `InfoWorker` finishes, `DetailView` emits `info_received(ticker, name, exchange, currency)`. `MainWindow` forwards this to `ChartWidget.set_company_info()` to fill the chart header without a second network call.
+
+### Prefetch
+
+On startup and whenever the time range changes, `MainWindow` spawns a `PrefetchWorker` that batch-fetches the current period's data for **all watchlist tickers at once** using `yf.download`. Results are stored directly into the in-memory history cache. By the time the user clicks any ticker, the data is already cached and the chart renders without a loading delay.
 
 ### Time ranges
 
@@ -79,6 +82,8 @@ Defined in `config.TIME_RANGES` (ordered dict, also drives the tab bar and keybo
 | 10Y | 10y | 1wk |
 | ALL | max | 1mo |
 
+`INTRADAY_INTERVALS = {"5m", "30m"}` — the auto-refresh timer and prefetch logic use this to decide whether to keep refreshing on a schedule.
+
 ---
 
 ## Caching
@@ -92,24 +97,26 @@ Two module-level dicts keyed by ticker (or `(ticker, period, interval)`) with a 
 | `fetch_info()` | 5 minutes | Eliminates company name / stats pop-in when re-selecting a ticker |
 | `fetch_history()` | 60 seconds | Avoids re-fetching chart data when switching back and forth |
 
-### SQLite price cache (`models/database.py`, `services/cache.py`)
+Stale entries are evicted from `_history_cache` on each write, keeping memory bounded.
 
-A `price_cache(ticker, date, open, high, low, close, volume)` table exists and has CRUD helpers (`get_cached_prices`, `upsert_prices`). The original design was to use this for daily+ intervals (intraday always fetched fresh). It is **not currently wired** to `HistoryWorker` — the chart fetches via `fetch_history()` which only uses the in-memory TTL cache above.
+The prefetch system populates `_history_cache` via `populate_history_cache()`, which uses the same keys and TTL as `fetch_history()`. Individual `HistoryWorker` calls then find the data already present.
 
 ### Settings (`models/database.py`)
 
-A `settings(key, value)` key-value table stores session state. Currently used for:
+A `settings(key, value)` key-value table stores session state:
 
 - `last_ticker` — restored on startup; falls back to the first watchlist item
 - `last_period` — restored on startup; falls back to `"1M"`
 
-The `settings` table is created by `init_db` alongside the other tables, so existing databases are migrated automatically on first run.
+The `settings` table is created by `init_db` alongside the watchlist table, so existing databases are upgraded automatically on first run.
 
 ---
 
 ## Price Refresh
 
-Watchlist prices are refreshed in the background every **60 seconds** via a `QTimer` in `WatchlistWidget`. Each tick spawns a single `PriceUpdateWorker` that fetches a 2-day daily window for every ticker in the list and computes the day-over-day change percentage. The current chart is **not** auto-refreshed; it shows the data from the last explicit load (ticker selection or range change).
+Watchlist prices are refreshed every **60 seconds** via a `QTimer` in `WatchlistWidget`. Each tick spawns a `PriceUpdateWorker` that calls `yf.download` once for **all tickers** in a single batch request, computes the day-over-day change percentage, and updates the sidebar labels.
+
+The chart auto-refreshes every **5 minutes** when the active period is intraday (1D or 1W). The timer starts and stops automatically as you switch ranges.
 
 ---
 
@@ -119,14 +126,19 @@ Watchlist prices are refreshed in the background every **60 seconds** via a `QTi
 - **Zoom** — x-axis only (`setMouseEnabled(x=True, y=False)`). Y auto-scales to the visible x range (`setAutoVisible(y=True)`). Zoom-out is capped at the data extent via `setLimits(maxXRange=...)`.
 - **Crosshair** — vertical + horizontal dashed lines, a tracking dot on the price line, a date label floating above the chart area (parent: `ChartWidget`, never overlaps data), and a price label pinned to the right edge at the cursor's y position.
 - **Volume** — rendered as a bar chart below the price chart, x-linked so it pans/zooms in sync. Hidden when no volume data is present.
+- **Prices** — displayed without a currency symbol; yfinance returns values in the ticker's native currency.
+
+---
+
+## Shutdown
+
+`MainWindow.closeEvent` calls `shutdown()` on `WatchlistWidget`, `ChartWidget`, and `DetailView`. Each stops its timers and calls `quit()` + `wait(2000ms)` on any in-flight worker threads before the process exits.
 
 ---
 
 ## Known Gaps / Future Work
 
-- **SQLite price cache not wired** — `HistoryWorker` calls `fetch_history()` directly. Wiring `cache.py` into the fetch path would reduce cold-start latency and allow offline browsing of previously viewed ranges.
-- **Currency symbols in detail stats** — `detail_view.py` still prefixes currency-typed values (Open, High, Low, EPS, etc.) with `$`. These should respect the ticker's actual currency, consistent with how the chart header now handles it.
-- **No auto-refresh for the chart** — the chart only reloads on explicit user action. A background refresh for the active ticker (especially on 1D) would keep intraday data current.
 - **No portfolio / cost-basis tracking** — purely a watchlist and chart viewer.
 - **No alerts or price notifications**.
+- **No chart auto-refresh for the selected ticker on non-intraday periods** — the chart only reloads on explicit user action for daily+ ranges (there is no useful new data to show mid-session anyway, but an explicit "refresh" button could be added).
 - **Flatpak packaging** — scaffolding is present in `flatpak/` but has not been validated end-to-end.

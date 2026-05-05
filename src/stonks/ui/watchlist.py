@@ -359,6 +359,20 @@ class WatchlistWidget(QWidget):
                 price, change_pct = prices[ticker]
                 widget.update_price(price, change_pct)
 
+    def get_tickers(self) -> list[str]:
+        return [
+            self.list_widget.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self.list_widget.count())
+        ]
+
+    def shutdown(self):
+        self.refresh_timer.stop()
+        self._search_timer.stop()
+        for w in self._workers:
+            w.quit()
+            w.wait(2000)
+        self._workers.clear()
+
     def focus_search(self):
         self.search_input.setFocus()
         self.search_input.selectAll()

@@ -22,6 +22,7 @@ def fetch_history(ticker: str, period: str, interval: str) -> pd.DataFrame:
     df = t.history(period=period, interval=interval)
     if df.empty:
         raise ValueError(f"No data returned for {ticker}")
+    _evict_history_cache(now)
     _history_cache[key] = (df, now)
     return df
 
@@ -35,6 +36,52 @@ def fetch_info(ticker: str) -> dict:
     result = t.info
     _info_cache[ticker] = (result, now)
     return result
+
+
+def batch_fetch_history(
+    tickers: list[str], period: str, interval: str
+) -> dict[str, pd.DataFrame]:
+    """Fetch history for multiple tickers in a single yfinance call."""
+    if not tickers:
+        return {}
+    df = yf.download(tickers, period=period, interval=interval, progress=False)
+    if df.empty:
+        return {}
+
+    results = {}
+    if df.columns.nlevels == 1:
+        # Flat columns — single ticker without MultiIndex
+        if len(tickers) == 1:
+            clean = df.dropna(how="all")
+            if not clean.empty:
+                results[tickers[0]] = clean
+    else:
+        # MultiIndex (price_type, ticker) — standard for yfinance 1.x
+        for ticker in tickers:
+            try:
+                ticker_df = df.xs(ticker, level=1, axis=1).dropna(how="all")
+                if not ticker_df.empty:
+                    results[ticker] = ticker_df
+            except KeyError:
+                pass
+
+    return results
+
+
+def populate_history_cache(
+    results: dict[str, pd.DataFrame], period: str, interval: str
+) -> None:
+    """Store batch-fetched DataFrames into the in-memory history cache."""
+    now = time.monotonic()
+    _evict_history_cache(now)
+    for ticker, df in results.items():
+        _history_cache[(ticker, period, interval)] = (df, now)
+
+
+def _evict_history_cache(now: float) -> None:
+    stale = [k for k, (_, t) in _history_cache.items() if now - t >= _HISTORY_TTL]
+    for k in stale:
+        del _history_cache[k]
 
 
 def search_tickers(query: str, max_results: int = 5) -> list[dict]:

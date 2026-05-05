@@ -2,7 +2,13 @@ import logging
 
 from PySide6.QtCore import QThread, Signal
 
-from stonks.services.stock_data import fetch_history, fetch_info, search_tickers, validate_ticker
+from stonks.services.stock_data import (
+    batch_fetch_history,
+    fetch_info,
+    populate_history_cache,
+    search_tickers,
+    validate_ticker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +41,8 @@ class HistoryWorker(QThread):
 
     def run(self):
         try:
+            from stonks.services.stock_data import fetch_history
+
             df = fetch_history(self.ticker, self.period, self.interval)
             self.finished.emit(df)
         except Exception as e:
@@ -82,20 +90,50 @@ class PriceUpdateWorker(QThread):
         self.tickers = tickers
 
     def run(self):
+        try:
+            batch = batch_fetch_history(self.tickers, "2d", "1d")
+        except Exception as e:
+            logger.debug("Batch price fetch failed: %s", e)
+            batch = {}
+
         results = {}
         for ticker in self.tickers:
             try:
-                df = fetch_history(ticker, "2d", "1d")
-                if len(df) >= 2:
-                    price = df["Close"].iloc[-1]
-                    prev = df["Close"].iloc[-2]
+                df = batch.get(ticker)
+                if df is None or df.empty:
+                    continue
+                close = df["Close"]
+                if len(close) >= 2:
+                    price = float(close.iloc[-1])
+                    prev = float(close.iloc[-2])
                     change_pct = ((price - prev) / prev) * 100
-                elif len(df) == 1:
-                    price = df["Close"].iloc[-1]
+                elif len(close) == 1:
+                    price = float(close.iloc[-1])
                     change_pct = 0.0
                 else:
                     continue
-                results[ticker] = (float(price), float(change_pct))
+                results[ticker] = (price, change_pct)
             except Exception:
-                logger.debug("Failed to fetch price for %s", ticker)
+                logger.debug("Failed to process price for %s", ticker)
+
         self.finished.emit(results)
+
+
+class PrefetchWorker(QThread):
+    finished = Signal()
+    error = Signal(str)
+
+    def __init__(self, tickers: list[str], period: str, interval: str):
+        super().__init__()
+        self.tickers = tickers
+        self.period = period
+        self.interval = interval
+
+    def run(self):
+        try:
+            results = batch_fetch_history(self.tickers, self.period, self.interval)
+            populate_history_cache(results, self.period, self.interval)
+            self.finished.emit()
+        except Exception as e:
+            logger.debug("Prefetch failed: %s", e)
+            self.error.emit(str(e))
