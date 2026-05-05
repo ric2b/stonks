@@ -19,6 +19,12 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 
+echo "Running checks..."
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest -q
+echo ""
+
 CURRENT=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
 if [ "$CURRENT" = "$VERSION" ]; then
   echo "Error: version is already $VERSION"

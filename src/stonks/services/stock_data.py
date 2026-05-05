@@ -8,45 +8,45 @@ import yfinance as yf
 logger = logging.getLogger(__name__)
 
 CURRENCY_SYMBOLS = {
-    'USD': '$',
-    'EUR': '€',
-    'GBP': '£',
-    'JPY': '¥',
-    'CNY': '¥',
-    'CAD': 'CA$',
-    'AUD': 'A$',
-    'NZD': 'NZ$',
-    'HKD': 'HK$',
-    'SGD': 'S$',
-    'TWD': 'NT$',
-    'INR': '₹',
-    'KRW': '₩',
-    'BRL': 'R$',
-    'ILS': '₪',
-    'MXN': 'MX$',
-    'THB': '฿',
-    'TRY': '₺',
-    'PHP': '₱',
-    'RUB': '₽',
-    'SEK': 'kr',
-    'NOK': 'kr',
-    'DKK': 'kr',
-    'CZK': 'Kč',
-    'PLN': 'zł',
-    'HUF': 'Ft',
+    "USD": "$",
+    "EUR": "€",
+    "GBP": "£",
+    "JPY": "¥",
+    "CNY": "¥",
+    "CAD": "CA$",
+    "AUD": "A$",
+    "NZD": "NZ$",
+    "HKD": "HK$",
+    "SGD": "S$",
+    "TWD": "NT$",
+    "INR": "₹",
+    "KRW": "₩",
+    "BRL": "R$",
+    "ILS": "₪",
+    "MXN": "MX$",
+    "THB": "฿",
+    "TRY": "₺",
+    "PHP": "₱",
+    "RUB": "₽",
+    "SEK": "kr",
+    "NOK": "kr",
+    "DKK": "kr",
+    "CZK": "Kč",
+    "PLN": "zł",
+    "HUF": "Ft",
 }
 
-_SUFFIX_CURRENCIES = {'EUR', 'SEK', 'NOK', 'DKK', 'CZK', 'PLN', 'HUF'}
+_SUFFIX_CURRENCIES = {"EUR", "SEK", "NOK", "DKK", "CZK", "PLN", "HUF"}
 
 
 def currency_format(code: str) -> tuple[str, str]:
     """Return (prefix, suffix) for the given currency code."""
-    symbol = CURRENCY_SYMBOLS.get(code, '')
+    symbol = CURRENCY_SYMBOLS.get(code, "")
     if not symbol:
-        return ('', '')
+        return ("", "")
     if code in _SUFFIX_CURRENCIES:
-        return ('', symbol)
-    return (symbol, '')
+        return ("", symbol)
+    return (symbol, "")
 
 
 _info_cache: dict[str, tuple[dict, float]] = {}
@@ -191,7 +191,7 @@ def fetch_currencies(tickers: list[str]) -> dict[str, str]:
     for ticker in tickers:
         cached = _info_cache.get(ticker)
         if cached is not None:
-            code = cached[0].get('currency') or ''
+            code = cached[0].get("currency") or ""
             if code:
                 results[ticker] = code
     return results
