@@ -1,3 +1,6 @@
+import ctypes
+import ctypes.util
+import platform
 import signal
 import sys
 from pathlib import Path
@@ -7,7 +10,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from stonks.config import DB_PATH
+from stonks.config import APP_NAME, DB_PATH
 from stonks.models.database import init_db
 from stonks.ui.main_window import MainWindow
 from stonks.ui.style import DARK_STYLE
@@ -15,11 +18,23 @@ from stonks.ui.style import DARK_STYLE
 _ICON_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "com.stonks.Stonks.svg"
 
 
+def _set_process_name(name: str):
+    if platform.system() == "Darwin":
+        try:
+            libc = ctypes.cdll.LoadLibrary(ctypes.util.find_library("c"))
+            libc.setprogname(name.encode())
+        except (OSError, AttributeError):
+            pass
+
+
 def main():
+    _set_process_name(APP_NAME)
+
     pg.setConfigOptions(antialias=True)
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Stonks")
+    app.setApplicationName(APP_NAME)
+    app.setApplicationDisplayName(APP_NAME)
     app.setDesktopFileName("com.stonks.Stonks")
     app.setStyleSheet(DARK_STYLE)
     if _ICON_PATH.exists():
