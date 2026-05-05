@@ -1,5 +1,6 @@
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import yfinance as yf
@@ -133,20 +134,27 @@ def _evict_history_cache(now: float) -> None:
 _name_cache: dict[str, str] = {}
 
 
+def _fetch_name_for_ticker(ticker: str) -> tuple[str, str]:
+    if ticker in _name_cache:
+        return ticker, _name_cache[ticker]
+    info = fetch_info(ticker)
+    name = info.get("longName") or info.get("shortName") or ""
+    if name:
+        _name_cache[ticker] = name
+    return ticker, name
+
+
 def fetch_names(tickers: list[str]) -> dict[str, str]:
     results = {}
-    for ticker in tickers:
-        if ticker in _name_cache:
-            results[ticker] = _name_cache[ticker]
-            continue
-        try:
-            info = fetch_info(ticker)
-            name = info.get("longName") or info.get("shortName") or ""
-            if name:
-                _name_cache[ticker] = name
-                results[ticker] = name
-        except Exception:
-            pass
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_fetch_name_for_ticker, t): t for t in tickers}
+        for future in as_completed(futures):
+            try:
+                ticker, name = future.result()
+                if name:
+                    results[ticker] = name
+            except Exception:
+                logger.debug("Failed to fetch name for %s", futures[future])
     return results
 
 
