@@ -62,5 +62,3 @@ def reorder_watchlist(conn: sqlite3.Connection, tickers: list[str]) -> None:
             (position, ticker.upper()),
         )
     conn.commit()
-
-

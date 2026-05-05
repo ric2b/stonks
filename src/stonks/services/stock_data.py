@@ -38,9 +38,7 @@ def fetch_info(ticker: str) -> dict:
     return result
 
 
-def batch_fetch_history(
-    tickers: list[str], period: str, interval: str
-) -> dict[str, pd.DataFrame]:
+def batch_fetch_history(tickers: list[str], period: str, interval: str) -> dict[str, pd.DataFrame]:
     """Fetch history for multiple tickers in a single yfinance call."""
     if not tickers:
         return {}
@@ -68,9 +66,7 @@ def batch_fetch_history(
     return results
 
 
-def populate_history_cache(
-    results: dict[str, pd.DataFrame], period: str, interval: str
-) -> None:
+def populate_history_cache(results: dict[str, pd.DataFrame], period: str, interval: str) -> None:
     """Store batch-fetched DataFrames into the in-memory history cache."""
     now = time.monotonic()
     _evict_history_cache(now)
