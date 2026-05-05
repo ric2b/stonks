@@ -7,6 +7,7 @@ from stonks.services.stock_data import (
     fetch_currencies,
     fetch_info,
     fetch_names,
+    fetch_prices,
     populate_history_cache,
     search_tickers,
     validate_ticker,
@@ -93,32 +94,11 @@ class PriceUpdateWorker(QThread):
 
     def run(self):
         try:
-            batch = batch_fetch_history(self.tickers, "5d", "1d")
+            results = fetch_prices(self.tickers)
+            self.finished.emit(results)
         except Exception as e:
-            logger.debug("Batch price fetch failed: %s", e)
-            batch = {}
-
-        results = {}
-        for ticker in self.tickers:
-            try:
-                df = batch.get(ticker)
-                if df is None or df.empty:
-                    continue
-                close = df["Close"].dropna()
-                if len(close) >= 2:
-                    price = float(close.iloc[-1])
-                    prev = float(close.iloc[-2])
-                    change_pct = ((price - prev) / prev) * 100
-                elif len(close) == 1:
-                    price = float(close.iloc[-1])
-                    change_pct = 0.0
-                else:
-                    continue
-                results[ticker] = (price, change_pct)
-            except Exception:
-                logger.debug("Failed to process price for %s", ticker)
-
-        self.finished.emit(results)
+            logger.debug("Price fetch failed: %s", e)
+            self.error.emit(str(e))
 
 
 class NameFetchWorker(QThread):

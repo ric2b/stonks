@@ -70,10 +70,10 @@ def fetch_history(ticker: str, period: str, interval: str) -> pd.DataFrame:
     return df
 
 
-def fetch_info(ticker: str) -> dict:
+def fetch_info(ticker: str, max_age: float = _INFO_TTL) -> dict:
     now = time.monotonic()
     cached = _info_cache.get(ticker)
-    if cached is not None and now - cached[1] < _INFO_TTL:
+    if cached is not None and now - cached[1] < max_age:
         return cached[0]
     t = yf.Ticker(ticker)
     result = t.info
@@ -155,6 +155,33 @@ def fetch_names(tickers: list[str]) -> dict[str, str]:
                     results[ticker] = name
             except Exception:
                 logger.debug("Failed to fetch name for %s", futures[future])
+    return results
+
+
+def fetch_prices(tickers: list[str]) -> dict[str, tuple[float, float]]:
+    """Return {ticker: (price, change_pct)} using real-time quote data."""
+    results = {}
+
+    def _fetch_one(ticker: str) -> tuple[str, float | None, float | None]:
+        info = fetch_info(ticker, max_age=_HISTORY_TTL)
+        price = info.get("regularMarketPrice")
+        prev = info.get("regularMarketPreviousClose")
+        return ticker, price, prev
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_fetch_one, t): t for t in tickers}
+        for future in as_completed(futures):
+            try:
+                ticker, price, prev = future.result()
+                if price is None:
+                    continue
+                if prev and prev != 0:
+                    change_pct = ((price - prev) / prev) * 100
+                else:
+                    change_pct = 0.0
+                results[ticker] = (price, change_pct)
+            except Exception:
+                logger.debug("Failed to fetch price for %s", futures[future])
     return results
 
 
