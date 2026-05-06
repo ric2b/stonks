@@ -158,7 +158,7 @@ class MainWindow(QMainWindow):
 
         for i in range(len(TIME_RANGES)):
             QShortcut(
-                QKeySequence(str(i + 1)),
+                QKeySequence(str((i + 1) % 10)),
                 self,
                 lambda idx=i: self.chart.set_range_by_index(idx),
             )

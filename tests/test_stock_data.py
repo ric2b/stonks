@@ -208,12 +208,12 @@ def test_currency_format_suffix_currencies():
     assert currency_format("EUR") == ("", "€")
     assert currency_format("SEK") == ("", "kr")
     assert currency_format("DKK") == ("", "kr")
+    assert currency_format("GBp") == ("", "p")
 
 
 def test_currency_format_unknown_returns_empty():
     assert currency_format("XYZ") == ("", "")
     assert currency_format("") == ("", "")
-    assert currency_format("GBp") == ("", "")
 
 
 # ── PriceUpdateWorker retry ─────────────────────────────────────────────────

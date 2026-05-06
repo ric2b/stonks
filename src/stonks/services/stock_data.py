@@ -34,9 +34,10 @@ CURRENCY_SYMBOLS = {
     "CZK": "Kč",
     "PLN": "zł",
     "HUF": "Ft",
+    "GBp": "p",
 }
 
-_SUFFIX_CURRENCIES = {"EUR", "SEK", "NOK", "DKK", "CZK", "PLN", "HUF"}
+_SUFFIX_CURRENCIES = {"EUR", "SEK", "NOK", "DKK", "CZK", "PLN", "HUF", "GBp"}
 
 
 def currency_format(code: str) -> tuple[str, str]:

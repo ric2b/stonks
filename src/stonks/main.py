@@ -15,6 +15,7 @@ from stonks.models.database import init_db
 from stonks.ui.main_window import MainWindow
 from stonks.ui.style import DARK_STYLE
 
+# Relies on source tree layout; distributed builds embed the icon at build time.
 _ICON_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "com.stonks.Stonks.svg"
 
 
