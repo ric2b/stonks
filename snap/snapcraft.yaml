@@ -37,10 +37,10 @@ parts:
     plugin: dump
     source: assets
     source-type: local
-    stage:
-      - com.stonks.Stonks.metainfo.xml
     organize:
       com.stonks.Stonks.metainfo.xml: usr/share/metainfo/com.stonks.Stonks.metainfo.xml
+    stage:
+      - usr/share/metainfo/com.stonks.Stonks.metainfo.xml
 
   stonks:
     plugin: python
