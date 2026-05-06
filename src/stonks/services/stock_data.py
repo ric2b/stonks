@@ -165,21 +165,21 @@ def fetch_prices(tickers: list[str]) -> dict[str, tuple[float, float]]:
     def _fetch_one(ticker: str) -> tuple[str, float | None, float | None]:
         info = fetch_info(ticker, max_age=_HISTORY_TTL)
         price = info.get("regularMarketPrice")
-        prev = info.get("regularMarketPreviousClose")
-        return ticker, price, prev
+        change_pct = info.get("regularMarketChangePercent")
+        if price is not None and change_pct is None:
+            prev = info.get("regularMarketPreviousClose")
+            if prev and prev != 0:
+                change_pct = ((price - prev) / prev) * 100
+        return ticker, price, change_pct
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         futures = {pool.submit(_fetch_one, t): t for t in tickers}
         for future in as_completed(futures):
             try:
-                ticker, price, prev = future.result()
+                ticker, price, change_pct = future.result()
                 if price is None:
                     continue
-                if prev and prev != 0:
-                    change_pct = ((price - prev) / prev) * 100
-                else:
-                    change_pct = 0.0
-                results[ticker] = (price, change_pct)
+                results[ticker] = (price, change_pct or 0.0)
             except Exception:
                 logger.debug("Failed to fetch price for %s", futures[future])
     return results
