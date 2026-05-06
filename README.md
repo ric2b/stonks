@@ -6,6 +6,31 @@ Desktop stock tracker for Linux and MacOS.
 
 <img width="902" height="776" alt="image" src="https://github.com/user-attachments/assets/d8ef0c6a-7d26-4cef-85fb-54b87eb90827" />
 
+## Install
+
+Download the latest release from the [Releases](../../releases/latest) page.
+
+### macOS
+
+Download `stonks-macos.dmg`, open it, and drag **Stonks** to your Applications folder.
+
+### Linux (AppImage)
+
+Download `stonks-x86_64.AppImage`, make it executable, and run it:
+
+```bash
+chmod +x stonks-x86_64.AppImage
+./stonks-x86_64.AppImage
+```
+
+### Linux (Snap)
+
+Download the `.snap` file and install it locally:
+
+```bash
+sudo snap install --dangerous stonks_*.snap
+```
+
 ## Features
 
 - Watchlist management (add/remove/reorder tickers)
