@@ -179,7 +179,7 @@ def fetch_prices(tickers: list[str]) -> dict[str, tuple[float, float]]:
                 ticker, price, change_pct = future.result()
                 if price is None:
                     continue
-                results[ticker] = (price, change_pct or 0.0)
+                results[ticker] = (price, change_pct if change_pct is not None else 0.0)
             except Exception:
                 logger.debug("Failed to fetch price for %s", futures[future])
     return results

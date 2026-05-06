@@ -25,6 +25,8 @@ _DAILY_INTERVALS = {"1d", "5d", "1wk", "1mo", "3mo"}
 
 
 def _price_decimals(prices: np.ndarray) -> int:
+    if len(prices) == 0:
+        return 2
     spread = float(prices.max() - prices.min())
     if spread == 0:
         return 2
