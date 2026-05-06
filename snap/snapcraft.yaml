@@ -1,10 +1,11 @@
 name: stonks
 base: core24
 adopt-info: stonks
-summary: Desktop stock tracker for Linux
+summary: Track stocks, crypto, and forex from your desktop
 description: |
-  A desktop stock tracker application for monitoring
-  your investments. Built with PySide6 and pyqtgraph.
+  Track stocks, ETFs, indices, crypto, and forex from your desktop.
+  Add any ticker to your watchlist, see live prices and daily change,
+  and explore interactive historical charts across multiple time ranges.
 grade: stable
 confinement: strict
 license: GPL-3.0-only
@@ -31,6 +32,15 @@ parts:
     source: snap/gui
     organize:
       stonks.desktop: meta/gui/stonks.desktop
+
+  metainfo:
+    plugin: dump
+    source: assets
+    source-type: local
+    stage:
+      - com.stonks.Stonks.metainfo.xml
+    organize:
+      com.stonks.Stonks.metainfo.xml: usr/share/metainfo/com.stonks.Stonks.metainfo.xml
 
   stonks:
     plugin: python

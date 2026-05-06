@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.stonks.Stonks</id>
+  <name>Stonks</name>
+  <summary>Desktop stock tracker for Linux and macOS</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+
+  <description>
+    <p>
+      Stonks is a lightweight desktop app for tracking stocks, ETFs, indices,
+      crypto, and forex. Add any ticker to your watchlist and see live prices,
+      daily change percentages, and interactive historical charts.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Watchlist with live prices and daily change</li>
+      <li>Interactive price charts with multiple time ranges (1D to Max)</li>
+      <li>Key financial stats: P/E, market cap, 52-week range, and more</li>
+      <li>Supports stocks, ETFs, indices, crypto, and forex</li>
+      <li>Drag-and-drop watchlist reordering</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">com.stonks.Stonks.desktop</launchable>
+
+  <url type="homepage">https://github.com/ric2b/stonks</url>
+  <url type="bugtracker">https://github.com/ric2b/stonks/issues</url>
+  <url type="vcs-browser">https://github.com/ric2b/stonks</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <image>https://github.com/user-attachments/assets/d8ef0c6a-7d26-4cef-85fb-54b87eb90827</image>
+      <caption>Watchlist with price chart and financial stats</caption>
+    </screenshot>
+  </screenshots>
+
+  <content_rating type="oars-1.1" />
+
+  <categories>
+    <category>Finance</category>
+    <category>Office</category>
+  </categories>
+
+  <provides>
+    <binary>stonks</binary>
+  </provides>
+</component>
