@@ -4,7 +4,7 @@
 
 Desktop stock tracker for Linux and MacOS.
 
-<img width="902" height="776" alt="image" src="https://github.com/user-attachments/assets/d8ef0c6a-7d26-4cef-85fb-54b87eb90827" />
+<img width="946" height="881" alt="image" src="https://github.com/user-attachments/assets/34b34e95-6909-479d-82fe-7db325b26225" />
 
 ## Install
 
