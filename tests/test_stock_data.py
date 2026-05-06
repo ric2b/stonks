@@ -8,9 +8,11 @@ from stonks.services.stock_data import (
     currency_format,
     fetch_history,
     fetch_info,
+    fetch_prices,
     populate_history_cache,
     validate_ticker,
 )
+from stonks.ui.workers import PriceUpdateWorker
 
 
 @pytest.fixture
@@ -210,3 +212,25 @@ def test_currency_format_unknown_returns_empty():
     assert currency_format("XYZ") == ("", "")
     assert currency_format("") == ("", "")
     assert currency_format("GBp") == ("", "")
+
+
+# ── PriceUpdateWorker retry ─────────────────────────────────────────────────
+
+
+@patch("stonks.ui.workers.time.sleep")
+@patch("stonks.ui.workers.fetch_prices")
+def test_price_update_worker_retries_missing_tickers(mock_fetch, mock_sleep, qtbot):
+    mock_fetch.side_effect = [
+        {"AAPL": (150.0, 1.5)},
+        {},
+        {"MSFT": (400.0, 2.0)},
+    ]
+
+    worker = PriceUpdateWorker(["AAPL", "MSFT"])
+    with qtbot.waitSignal(worker.finished, timeout=5000) as blocker:
+        worker.start()
+
+    assert blocker.args[0] == {"AAPL": (150.0, 1.5), "MSFT": (400.0, 2.0)}
+    assert mock_fetch.call_count == 3
+    assert mock_sleep.call_args_list[0].args[0] == 0.5
+    assert mock_sleep.call_args_list[1].args[0] == 1.0

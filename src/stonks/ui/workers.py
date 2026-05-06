@@ -1,4 +1,5 @@
 import logging
+import time
 
 from PySide6.QtCore import QThread, Signal
 
@@ -95,6 +96,13 @@ class PriceUpdateWorker(QThread):
     def run(self):
         try:
             results = fetch_prices(self.tickers)
+            missing = [t for t in self.tickers if t not in results]
+            delay = 0.5
+            while missing:
+                time.sleep(delay)
+                delay = min(delay * 2, 10)
+                results.update(fetch_prices(missing))
+                missing = [t for t in self.tickers if t not in results]
             self.finished.emit(results)
         except Exception as e:
             logger.debug("Price fetch failed: %s", e)
