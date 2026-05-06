@@ -3,8 +3,9 @@ from datetime import datetime
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QFrame,
     QHBoxLayout,
@@ -169,8 +170,7 @@ class ChartWidget(QWidget):
         self.price_widget.getAxis("bottom").setTextPen(pg.mkPen("#6b6b6b"))
         self.price_widget.getAxis("left").setPen(pg.mkPen("#303030"))
         self.price_widget.getAxis("bottom").setPen(pg.mkPen("#303030"))
-        # Only allow horizontal zoom/pan; y auto-scales to visible x data
-        self.price_widget.setMouseEnabled(x=True, y=False)
+        self.price_widget.setMouseEnabled(x=False, y=False)
         self.price_widget.plotItem.vb.setAutoVisible(y=True)
         layout.addWidget(self.price_widget, stretch=1)
 
@@ -218,6 +218,25 @@ class ChartWidget(QWidget):
         self._hover_price.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._hover_price.setVisible(False)
 
+        # ── Drag-to-compare state ──────────────────────────────
+        self._drag_active = False
+        self._drag_start_idx = None
+
+        self._drag_anchor = pg.ScatterPlotItem(
+            size=9,
+            pen=pg.mkPen("#242424", width=2),
+            brush=pg.mkBrush("#ffffff"),
+        )
+        self._drag_anchor.setZValue(20)
+        self._drag_anchor.setVisible(False)
+        self.price_widget.addItem(self._drag_anchor)
+
+        self._drag_region = pg.PlotDataItem(pen=pg.mkPen(None))
+        self._drag_region.setZValue(5)
+        self._drag_region.setVisible(False)
+        self.price_widget.addItem(self._drag_region)
+
+        self.price_widget.viewport().installEventFilter(self)
         self.price_widget.scene().sigMouseMoved.connect(self._on_mouse_moved)
 
         self._timestamps = None
@@ -290,6 +309,8 @@ class ChartWidget(QWidget):
         self._track_dot.setVisible(False)
         self._hover_date.setText("")
         self._hover_price.setVisible(False)
+        if self._drag_active:
+            self._end_drag()
 
     def _show_status(self, text: str):
         self._hide_crosshair()
@@ -298,6 +319,8 @@ class ChartWidget(QWidget):
         self.price_widget.addItem(self._hline)
         self.price_widget.addItem(self._track_dot)
         self.price_widget.addItem(self._status_label)
+        self.price_widget.addItem(self._drag_anchor)
+        self.price_widget.addItem(self._drag_region)
         self.price_widget.plotItem.vb.setLimits(xMin=None, xMax=None, maxXRange=None)
         self._timestamps = None
         self._prices = None
@@ -358,6 +381,11 @@ class ChartWidget(QWidget):
         self.price_widget.addItem(self._hline)
         self.price_widget.addItem(self._track_dot)
         self.price_widget.addItem(self._status_label)
+        self.price_widget.addItem(self._drag_anchor)
+        self.price_widget.addItem(self._drag_region)
+
+        if self._drag_active:
+            self._end_drag()
 
         if df.empty:
             self._show_status("No data available")
@@ -439,7 +467,8 @@ class ChartWidget(QWidget):
 
         vb = self.price_widget.plotItem.vb
         if not vb.sceneBoundingRect().contains(pos):
-            self._hide_crosshair()
+            if not self._drag_active:
+                self._hide_crosshair()
             return
 
         mouse_point = vb.mapSceneToView(pos)
@@ -451,32 +480,94 @@ class ChartWidget(QWidget):
         ts = float(self._timestamps[idx])
         price = float(self._prices[idx])
 
-        # Vertical + horizontal dashed lines
+        left_pressed = bool(QApplication.mouseButtons() & Qt.MouseButton.LeftButton)
+        if left_pressed and not self._drag_active:
+            self._drag_active = True
+            self._drag_start_idx = idx
+            self._drag_anchor.setData([ts], [price])
+            self._drag_anchor.setVisible(True)
+
         self._vline.setPos(ts)
         self._vline.setVisible(True)
-        self._hline.setPos(price)
-        self._hline.setVisible(True)
 
-        # Tracking dot
         self._track_dot.setData([ts], [price])
         self._track_dot.setVisible(True)
 
-        dt = datetime.fromtimestamp(int(ts))
         _, interval = TIME_RANGES[self._current_period]
-        if interval in _DAILY_INTERVALS:
-            self._hover_date.setText(dt.strftime("%b %d, %Y"))
-        else:
-            self._hover_date.setText(dt.strftime("%b %d, %Y  %H:%M"))
-
+        d = self._price_fmt_decimals
+        pre = self._currency_prefix
+        suf = self._currency_suffix
         pw = self.price_widget
 
-        # Price label pinned to right edge at same height as tracking dot
-        d = self._price_fmt_decimals
-        scene_pos = vb.mapViewToScene(pg.Point(ts, price))
-        widget_y = self.price_widget.mapFromScene(scene_pos).y()
-        lbl_h, lbl_w = 18, 100
-        y_clamped = max(0, min(int(widget_y) - lbl_h // 2, self.price_widget.height() - lbl_h))
-        self._hover_price.setGeometry(pw.width() - lbl_w - 2, y_clamped, lbl_w, lbl_h)
-        self._hover_price.setText(f"{self._currency_prefix}{price:,.{d}f}{self._currency_suffix}")
-        self._hover_price.setVisible(True)
-        self._hover_price.raise_()
+        if self._drag_active and self._drag_start_idx is not None:
+            start_ts = float(self._timestamps[self._drag_start_idx])
+            start_price = float(self._prices[self._drag_start_idx])
+
+            self._hline.setVisible(False)
+
+            start_dt = datetime.fromtimestamp(int(start_ts))
+            end_dt = datetime.fromtimestamp(int(ts))
+            fmt = "%b %d, %Y" if interval in _DAILY_INTERVALS else "%b %d, %Y  %H:%M"
+            change = price - start_price
+            pct = (change / start_price) * 100 if start_price != 0 else 0.0
+            sign = "+" if change >= 0 else "−"
+            color = "#4cd278" if change >= 0 else "#ff6b7a"
+            self._track_dot.setBrush(pg.mkBrush(color))
+            self._hover_date.setText(
+                f"{start_dt.strftime(fmt)} – {end_dt.strftime(fmt)}"
+                f"&nbsp;&nbsp;&nbsp;"
+                f'<span style="color:{color}; font-weight:600">'
+                f"{sign}{pre}{abs(change):,.{d}f}{suf}"
+                f" ({sign}{abs(pct):.2f}%)</span>"
+            )
+            lo, hi = sorted([self._drag_start_idx, idx])
+            region_ts = self._timestamps[lo : hi + 1]
+            region_prices = self._prices[lo : hi + 1]
+            region_ts, region_prices = _fill_closed_market_gaps(region_ts, region_prices)
+            rgb = (76, 210, 120) if change >= 0 else (255, 107, 122)
+            self._drag_region.setData(
+                x=region_ts,
+                y=region_prices,
+                pen=pg.mkPen(color=rgb, width=1.75),
+                fillLevel=float(self._prices.min()),
+                brush=pg.mkBrush((*rgb, 80)),
+            )
+            self._drag_region.setVisible(True)
+
+            self._hover_price.setVisible(False)
+        else:
+            self._hline.setPos(price)
+            self._hline.setVisible(True)
+
+            dt = datetime.fromtimestamp(int(ts))
+            if interval in _DAILY_INTERVALS:
+                self._hover_date.setText(dt.strftime("%b %d, %Y"))
+            else:
+                self._hover_date.setText(dt.strftime("%b %d, %Y  %H:%M"))
+
+            scene_pos = vb.mapViewToScene(pg.Point(ts, price))
+            widget_y = self.price_widget.mapFromScene(scene_pos).y()
+            lbl_h, lbl_w = 18, 100
+            y_clamped = max(0, min(int(widget_y) - lbl_h // 2, pw.height() - lbl_h))
+            self._hover_price.setGeometry(pw.width() - lbl_w - 2, y_clamped, lbl_w, lbl_h)
+            self._hover_price.setText(f"{pre}{price:,.{d}f}{suf}")
+            self._hover_price.setVisible(True)
+            self._hover_price.raise_()
+
+    def eventFilter(self, obj, event):
+        if obj is self.price_widget.viewport():
+            if (
+                event.type() == QEvent.Type.MouseButtonRelease
+                and event.button() == Qt.MouseButton.LeftButton
+                and self._drag_active
+            ):
+                self._end_drag()
+        return super().eventFilter(obj, event)
+
+    def _end_drag(self):
+        self._drag_active = False
+        self._drag_start_idx = None
+        self._drag_anchor.setVisible(False)
+        self._drag_region.setVisible(False)
+        dot_color = (76, 210, 120) if self._is_up else (255, 107, 122)
+        self._track_dot.setBrush(pg.mkBrush(dot_color))

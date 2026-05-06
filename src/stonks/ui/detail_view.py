@@ -75,21 +75,21 @@ def format_number(value, fmt_type: str, prefix: str = "", suffix: str = "") -> s
 
 def _relative_time(iso_str: str) -> str:
     try:
-        dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
+        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
         delta = datetime.now(timezone.utc) - dt
         seconds = int(delta.total_seconds())
         if seconds < 60:
-            return 'just now'
+            return "just now"
         minutes = seconds // 60
         if minutes < 60:
-            return f'{minutes}m ago'
+            return f"{minutes}m ago"
         hours = minutes // 60
         if hours < 24:
-            return f'{hours}h ago'
+            return f"{hours}h ago"
         days = hours // 24
-        return f'{days}d ago'
+        return f"{days}d ago"
     except (ValueError, TypeError):
-        return ''
+        return ""
 
 
 class _StatPair(QWidget):
@@ -212,12 +212,12 @@ class NewsWidget(QWidget):
             return
         self._news_header.show()
         for i, article in enumerate(items):
-            time_ago = _relative_time(article.get('pubDate', ''))
+            time_ago = _relative_time(article.get("pubDate", ""))
             news_item = _NewsItem(
-                article.get('title', ''),
-                article.get('provider', ''),
+                article.get("title", ""),
+                article.get("provider", ""),
                 time_ago,
-                article.get('url', ''),
+                article.get("url", ""),
             )
             self._news_layout.insertWidget(self._news_layout.count() - 1, news_item)
             if i < len(items) - 1:

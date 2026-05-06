@@ -234,25 +234,27 @@ def fetch_news(ticker: str, max_items: int = 8) -> list[dict]:
     raw = t.news or []
     items = []
     for entry in raw[:max_items]:
-        c = entry.get('content', {})
-        title = c.get('title', '')
+        c = entry.get("content", {})
+        title = c.get("title", "")
         if not title:
             continue
-        url = ''
-        for url_key in ('clickThroughUrl', 'canonicalUrl'):
+        url = ""
+        for url_key in ("clickThroughUrl", "canonicalUrl"):
             url_obj = c.get(url_key)
             if url_obj:
-                url = url_obj.get('url', '')
+                url = url_obj.get("url", "")
                 if url:
                     break
-        provider = c.get('provider', {}).get('displayName', '')
-        pub_date = c.get('pubDate', '')
-        items.append({
-            'title': title,
-            'url': url,
-            'provider': provider,
-            'pubDate': pub_date,
-        })
+        provider = c.get("provider", {}).get("displayName", "")
+        pub_date = c.get("pubDate", "")
+        items.append(
+            {
+                "title": title,
+                "url": url,
+                "provider": provider,
+                "pubDate": pub_date,
+            }
+        )
     _news_cache[ticker] = (items, now)
     return items
 
