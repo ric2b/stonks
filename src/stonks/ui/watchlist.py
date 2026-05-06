@@ -302,7 +302,7 @@ class WatchlistWidget(QWidget):
         add_ticker(self.conn, symbol)
         self._add_list_item(symbol)
         self._update_count()
-        self._refresh_prices()
+        self.list_widget.setCurrentRow(self.list_widget.count() - 1)
 
     def _update_count(self):
         self.header_label.setText(f"Watchlist · {self.list_widget.count()}")
@@ -325,7 +325,7 @@ class WatchlistWidget(QWidget):
         return False
 
     def _add_list_item(self, ticker: str, name: str = "", currency: str = ""):
-        item = QListWidgetItem(self.list_widget)
+        item = QListWidgetItem()
         widget = WatchlistItemWidget(ticker)
         item.setSizeHint(widget.sizeHint())
         item.setData(Qt.ItemDataRole.UserRole, ticker)
@@ -394,6 +394,15 @@ class WatchlistWidget(QWidget):
                 widget = self.list_widget.itemWidget(item)
                 if widget is not None:
                     widget.name_label.setText(name)
+                break
+
+    def update_price(self, ticker: str, price: float, change_pct: float):
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == ticker:
+                widget = self.list_widget.itemWidget(item)
+                if widget is not None:
+                    widget.update_price(price, change_pct)
                 break
 
     def update_currency(self, ticker: str, currency_code: str):

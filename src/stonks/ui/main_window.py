@@ -154,6 +154,7 @@ class MainWindow(QMainWindow):
         self.watchlist.ticker_selected.connect(self._on_ticker_selected)
         self.detail_view.info_received.connect(self.chart.set_company_info)
         self.detail_view.info_received.connect(self._on_info_received)
+        self.detail_view.price_received.connect(self.watchlist.update_price)
         self.detail_view.market_state_changed.connect(self.status_bar.set_market_state)
         self.chart.range_changed.connect(self._on_chart_range_changed)
 

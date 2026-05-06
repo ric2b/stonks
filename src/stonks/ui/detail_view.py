@@ -231,6 +231,7 @@ class NewsWidget(QWidget):
 
 class DetailView(QWidget):
     info_received = Signal(str, str, str, str)
+    price_received = Signal(str, float, float)
     market_state_changed = Signal(str, int)
 
     def __init__(self, parent=None):
@@ -310,6 +311,15 @@ class DetailView(QWidget):
         name = info.get("longName") or info.get("shortName") or ticker
         exchange = info.get("fullExchangeName") or info.get("exchange") or ""
         self.info_received.emit(ticker, name, exchange, currency_code)
+
+        price = info.get("regularMarketPrice")
+        if price is not None:
+            change_pct = info.get("regularMarketChangePercent")
+            if change_pct is None:
+                prev = info.get("regularMarketPreviousClose")
+                if prev and prev != 0:
+                    change_pct = ((price - prev) / prev) * 100
+            self.price_received.emit(ticker, float(price), float(change_pct or 0.0))
 
         market_state = info.get("marketState") or "CLOSED"
         delay = int(info.get("exchangeDataDelayedBy") or 0)
