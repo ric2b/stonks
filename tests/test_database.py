@@ -1,7 +1,10 @@
+import sqlite3
+
 from stonks.models.database import (
     add_ticker,
     get_setting,
     get_watchlist,
+    init_db,
     remove_ticker,
     reorder_watchlist,
     set_setting,
@@ -118,3 +121,33 @@ def test_update_ticker_meta_persists_across_reads(db):
     assert watchlist[0]["name"] == ""
     assert watchlist[1]["name"] == "Microsoft Corporation"
     assert watchlist[1]["currency"] == "USD"
+
+
+def test_migrate_adds_missing_columns(tmp_path):
+    db_path = tmp_path / "legacy.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE watchlist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT UNIQUE NOT NULL,
+            position INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+    conn.execute("INSERT INTO watchlist (ticker, position) VALUES ('AAPL', 0)")
+    conn.commit()
+    conn.close()
+
+    conn = init_db(db_path)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(watchlist)").fetchall()}
+    assert "name" in cols
+    assert "currency" in cols
+    watchlist = get_watchlist(conn)
+    assert watchlist[0]["ticker"] == "AAPL"
+    assert watchlist[0]["name"] == ""
+    conn.close()

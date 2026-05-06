@@ -6,10 +6,12 @@ import pytest
 from stonks.services.stock_data import (
     batch_fetch_history,
     currency_format,
+    fetch_currencies,
     fetch_history,
     fetch_info,
-    fetch_prices,
+    fetch_names,
     populate_history_cache,
+    search_tickers,
     validate_ticker,
 )
 from stonks.ui.workers import PriceUpdateWorker
@@ -234,3 +236,79 @@ def test_price_update_worker_retries_missing_tickers(mock_fetch, mock_sleep, qtb
     assert mock_fetch.call_count == 3
     assert mock_sleep.call_args_list[0].args[0] == 0.5
     assert mock_sleep.call_args_list[1].args[0] == 1.0
+
+
+# ── search_tickers ──────────────────────────────────────────────────────────
+
+
+@patch("stonks.services.stock_data.yf.Search")
+def test_search_tickers_returns_results(mock_search):
+    mock_search.return_value.quotes = [
+        {"symbol": "AAPL", "shortname": "Apple Inc.", "exchDisp": "NASDAQ"},
+        {"symbol": "AAPL.MX", "shortname": "Apple Inc.", "exchDisp": "Mexico"},
+    ]
+    results = search_tickers("AAPL")
+    assert len(results) == 2
+    assert results[0]["symbol"] == "AAPL"
+    assert results[0]["name"] == "Apple Inc."
+    assert results[0]["exchange"] == "NASDAQ"
+
+
+@patch("stonks.services.stock_data.yf.Search")
+def test_search_tickers_skips_entries_without_symbol(mock_search):
+    mock_search.return_value.quotes = [
+        {"shortname": "No symbol here"},
+        {"symbol": "MSFT", "shortname": "Microsoft"},
+    ]
+    results = search_tickers("test")
+    assert len(results) == 1
+    assert results[0]["symbol"] == "MSFT"
+
+
+@patch("stonks.services.stock_data.yf.Search")
+def test_search_tickers_respects_max_results(mock_search):
+    mock_search.return_value.quotes = [
+        {"symbol": f"T{i}", "shortname": f"Ticker {i}"} for i in range(10)
+    ]
+    results = search_tickers("test", max_results=3)
+    assert len(results) == 3
+
+
+# ── fetch_names ─────────────────────────────────────────────────────────────
+
+
+@patch("stonks.services.stock_data.yf.Ticker")
+def test_fetch_names_returns_names(mock_ticker_cls):
+    mock_ticker_cls.return_value.info = {"longName": "Apple Inc."}
+    names = fetch_names(["AAPL"])
+    assert names == {"AAPL": "Apple Inc."}
+
+
+@patch("stonks.services.stock_data.yf.Ticker")
+def test_fetch_names_uses_shortname_fallback(mock_ticker_cls):
+    mock_ticker_cls.return_value.info = {"shortName": "Apple"}
+    names = fetch_names(["AAPL"])
+    assert names == {"AAPL": "Apple"}
+
+
+@patch("stonks.services.stock_data.yf.Ticker")
+def test_fetch_names_skips_tickers_with_no_name(mock_ticker_cls):
+    mock_ticker_cls.return_value.info = {}
+    names = fetch_names(["AAPL"])
+    assert names == {}
+
+
+# ── fetch_currencies ────────────────────────────────────────────────────────
+
+
+def test_fetch_currencies_returns_cached_currencies():
+    from stonks.services import stock_data
+
+    stock_data._info_cache["AAPL"] = ({"currency": "USD"}, 0.0)
+    result = fetch_currencies(["AAPL"])
+    assert result == {"AAPL": "USD"}
+
+
+def test_fetch_currencies_skips_uncached_tickers():
+    result = fetch_currencies(["AAPL"])
+    assert result == {}
