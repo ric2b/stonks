@@ -215,6 +215,28 @@ QLabel#statValue {
     background-color: transparent;
 }
 
+/* ── News section ───────────────────────────────────── */
+QLabel#newsHeader {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 107);
+    background-color: transparent;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+}
+QLabel#newsTitle {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 220);
+    background-color: transparent;
+    line-height: 1.3;
+}
+QLabel#newsMeta {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 107);
+    background-color: transparent;
+}
+
 /* ── Status bar ──────────────────────────────────────── */
 QWidget#statusBar {
     background-color: #2a2a2a;

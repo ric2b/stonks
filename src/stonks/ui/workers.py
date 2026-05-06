@@ -8,6 +8,7 @@ from stonks.services.stock_data import (
     fetch_currencies,
     fetch_info,
     fetch_names,
+    fetch_news,
     fetch_prices,
     populate_history_cache,
     search_tickers,
@@ -125,6 +126,22 @@ class NameFetchWorker(QThread):
             self.finished.emit(names, currencies)
         except Exception as e:
             logger.debug("Name fetch failed: %s", e)
+
+
+class NewsWorker(QThread):
+    finished = Signal(list)
+    error = Signal(str)
+
+    def __init__(self, ticker: str):
+        super().__init__()
+        self.ticker = ticker
+
+    def run(self):
+        try:
+            items = fetch_news(self.ticker)
+            self.finished.emit(items)
+        except Exception as e:
+            self.error.emit(str(e))
 
 
 class PrefetchWorker(QThread):

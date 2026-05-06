@@ -221,6 +221,42 @@ def search_tickers(query: str, max_results: int = 5) -> list[dict]:
     return out
 
 
+_news_cache: dict[str, tuple[list[dict], float]] = {}
+_NEWS_TTL = 300.0
+
+
+def fetch_news(ticker: str, max_items: int = 8) -> list[dict]:
+    now = time.monotonic()
+    cached = _news_cache.get(ticker)
+    if cached is not None and now - cached[1] < _NEWS_TTL:
+        return cached[0]
+    t = yf.Ticker(ticker)
+    raw = t.news or []
+    items = []
+    for entry in raw[:max_items]:
+        c = entry.get('content', {})
+        title = c.get('title', '')
+        if not title:
+            continue
+        url = ''
+        for url_key in ('clickThroughUrl', 'canonicalUrl'):
+            url_obj = c.get(url_key)
+            if url_obj:
+                url = url_obj.get('url', '')
+                if url:
+                    break
+        provider = c.get('provider', {}).get('displayName', '')
+        pub_date = c.get('pubDate', '')
+        items.append({
+            'title': title,
+            'url': url,
+            'provider': provider,
+            'pubDate': pub_date,
+        })
+    _news_cache[ticker] = (items, now)
+    return items
+
+
 def validate_ticker(ticker: str) -> bool:
     try:
         t = yf.Ticker(ticker)

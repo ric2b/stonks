@@ -16,7 +16,7 @@ from stonks.config import TIME_RANGES
 from stonks.models.database import get_setting, set_setting, update_ticker_meta
 from stonks.services.stock_data import is_history_cached
 from stonks.ui.chart_widget import ChartWidget
-from stonks.ui.detail_view import DetailView
+from stonks.ui.detail_view import DetailView, NewsWidget
 from stonks.ui.watchlist import WatchlistWidget
 from stonks.ui.workers import PrefetchWorker
 
@@ -117,19 +117,31 @@ class MainWindow(QMainWindow):
         self.watchlist = WatchlistWidget(conn)
         splitter.addWidget(self.watchlist)
 
-        right_pane = QWidget()
-        right_pane.setObjectName("rightPane")
-        right_layout = QVBoxLayout(right_pane)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(0)
+        right_splitter = QSplitter(Qt.Orientation.Vertical)
+        right_splitter.setObjectName("rightPane")
+
+        top_pane = QWidget()
+        top_pane.setObjectName("rightPane")
+        top_layout = QVBoxLayout(top_pane)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(0)
 
         self.chart = ChartWidget(conn)
-        right_layout.addWidget(self.chart, stretch=2)
+        top_layout.addWidget(self.chart, stretch=1)
 
         self.detail_view = DetailView()
-        right_layout.addWidget(self.detail_view, stretch=1)
+        top_layout.addWidget(self.detail_view)
 
-        splitter.addWidget(right_pane)
+        right_splitter.addWidget(top_pane)
+
+        self.news_widget = NewsWidget()
+        right_splitter.addWidget(self.news_widget)
+
+        right_splitter.setSizes([400, 200])
+        right_splitter.setCollapsible(0, False)
+        right_splitter.setCollapsible(1, False)
+
+        splitter.addWidget(right_splitter)
         splitter.setSizes([260, 640])
 
         main_layout.addWidget(splitter, stretch=1)
@@ -196,6 +208,7 @@ class MainWindow(QMainWindow):
         self.watchlist.shutdown()
         self.chart.shutdown()
         self.detail_view.shutdown()
+        self.news_widget.shutdown()
         for w in self._workers:
             w.quit()
             w.wait(2000)
@@ -210,6 +223,7 @@ class MainWindow(QMainWindow):
         set_setting(self.conn, "last_ticker", ticker)
         self.chart.update_chart(ticker)
         self.detail_view.update_detail(ticker)
+        self.news_widget.update_news(ticker)
         yf_period, yf_interval = TIME_RANGES[self.chart._current_period]
         if not is_history_cached(ticker, yf_period, yf_interval):
             self.status_bar.show_message(f"Loading {ticker}…", 3000)
