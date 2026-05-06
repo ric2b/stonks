@@ -95,14 +95,16 @@ class PriceUpdateWorker(QThread):
 
     def run(self):
         try:
-            results = fetch_prices(self.tickers)
-            missing = [t for t in self.tickers if t not in results]
+            results, no_data = fetch_prices(self.tickers)
+            missing = [t for t in self.tickers if t not in results and t not in no_data]
             delay = 0.5
             while missing:
                 time.sleep(delay)
                 delay = min(delay * 2, 10)
-                results.update(fetch_prices(missing))
-                missing = [t for t in self.tickers if t not in results]
+                new_results, new_no_data = fetch_prices(missing)
+                results.update(new_results)
+                no_data.update(new_no_data)
+                missing = [t for t in self.tickers if t not in results and t not in no_data]
             self.finished.emit(results)
         except Exception as e:
             logger.debug("Price fetch failed: %s", e)

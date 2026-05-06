@@ -221,11 +221,11 @@ def test_currency_format_unknown_returns_empty():
 
 @patch("stonks.ui.workers.time.sleep")
 @patch("stonks.ui.workers.fetch_prices")
-def test_price_update_worker_retries_missing_tickers(mock_fetch, mock_sleep, qtbot):
+def test_price_update_worker_retries_transient_failures(mock_fetch, mock_sleep, qtbot):
     mock_fetch.side_effect = [
-        {"AAPL": (150.0, 1.5)},
-        {},
-        {"MSFT": (400.0, 2.0)},
+        ({"AAPL": (150.0, 1.5)}, set()),
+        ({}, set()),
+        ({"MSFT": (400.0, 2.0)}, set()),
     ]
 
     worker = PriceUpdateWorker(["AAPL", "MSFT"])
@@ -236,6 +236,20 @@ def test_price_update_worker_retries_missing_tickers(mock_fetch, mock_sleep, qtb
     assert mock_fetch.call_count == 3
     assert mock_sleep.call_args_list[0].args[0] == 0.5
     assert mock_sleep.call_args_list[1].args[0] == 1.0
+
+
+@patch("stonks.ui.workers.time.sleep")
+@patch("stonks.ui.workers.fetch_prices")
+def test_price_update_worker_does_not_retry_no_data_tickers(mock_fetch, mock_sleep, qtbot):
+    mock_fetch.return_value = ({"AAPL": (150.0, 1.5)}, {"DELISTED"})
+
+    worker = PriceUpdateWorker(["AAPL", "DELISTED"])
+    with qtbot.waitSignal(worker.finished, timeout=5000) as blocker:
+        worker.start()
+
+    assert blocker.args[0] == {"AAPL": (150.0, 1.5)}
+    assert mock_fetch.call_count == 1
+    mock_sleep.assert_not_called()
 
 
 # ── search_tickers ──────────────────────────────────────────────────────────

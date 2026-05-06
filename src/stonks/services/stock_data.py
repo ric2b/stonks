@@ -159,9 +159,14 @@ def fetch_names(tickers: list[str]) -> dict[str, str]:
     return results
 
 
-def fetch_prices(tickers: list[str]) -> dict[str, tuple[float, float]]:
-    """Return {ticker: (price, change_pct)} using real-time quote data."""
+def fetch_prices(tickers: list[str]) -> tuple[dict[str, tuple[float, float]], set[str]]:
+    """Return ({ticker: (price, change_pct)}, no_data_tickers).
+
+    Tickers in no_data got a valid response but had no price (delisted/invalid).
+    Tickers absent from both had a transient error and may be worth retrying.
+    """
     results = {}
+    no_data: set[str] = set()
 
     def _fetch_one(ticker: str) -> tuple[str, float | None, float | None]:
         info = fetch_info(ticker, max_age=_HISTORY_TTL)
@@ -179,11 +184,12 @@ def fetch_prices(tickers: list[str]) -> dict[str, tuple[float, float]]:
             try:
                 ticker, price, change_pct = future.result()
                 if price is None:
+                    no_data.add(ticker)
                     continue
                 results[ticker] = (price, change_pct if change_pct is not None else 0.0)
             except Exception:
                 logger.debug("Failed to fetch price for %s", futures[future])
-    return results
+    return results, no_data
 
 
 def fetch_currencies(tickers: list[str]) -> dict[str, str]:
