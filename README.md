@@ -39,7 +39,7 @@ sudo snap install --dangerous stonks_*.snap
 
 ## Development
 
-Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync --all-extras
@@ -56,7 +56,7 @@ uv run ruff check .
 ## Releasing
 
 ```bash
-./release.sh 0.2.0
+./release.sh X.Y.Z
 git push && git push --tags
 ```
 
