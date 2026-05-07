@@ -1,7 +1,6 @@
 DARK_STYLE = """
 /* ── Global ─────────────────────────────────────────── */
 QWidget {
-    font-family: "Inter", "Cantarell", system-ui, sans-serif;
     font-size: 13px;
     color: rgba(255, 255, 255, 235);
     background-color: #1e1e1e;
@@ -86,7 +85,7 @@ QLabel#sidebarTicker {
     background-color: transparent;
 }
 QLabel#sidebarPrice {
-    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-family: "Courier New";
     font-size: 13px;
     font-weight: 500;
     color: rgba(255, 255, 255, 235);
@@ -98,7 +97,7 @@ QLabel#sidebarName {
     background-color: transparent;
 }
 QLabel#sidebarChange {
-    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-family: "Courier New";
     font-size: 11px;
     font-weight: 600;
     background-color: transparent;
@@ -135,7 +134,6 @@ QPushButton#rangeBtn {
     border-radius: 12px;
     padding: 6px 14px;
     color: rgba(255, 255, 255, 158);
-    font-family: "Inter", "Cantarell", system-ui, sans-serif;
     font-size: 12px;
     font-weight: 500;
     min-width: 28px;
@@ -165,26 +163,26 @@ QLabel#chartCompany {
     background-color: transparent;
 }
 QLabel#chartPrice {
-    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-family: "Courier New";
     font-size: 22px;
     font-weight: 600;
     color: rgba(255, 255, 255, 235);
     background-color: transparent;
 }
 QLabel#chartChange {
-    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-family: "Courier New";
     font-size: 13px;
     font-weight: 600;
     background-color: transparent;
 }
 QLabel#chartHoverDate {
-    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-family: "Courier New";
     font-size: 11px;
     color: rgba(255, 255, 255, 158);
     background-color: transparent;
 }
 QLabel#chartHoverPrice {
-    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-family: "Courier New";
     font-size: 11px;
     font-weight: 500;
     color: rgba(255, 255, 255, 235);
@@ -194,7 +192,7 @@ QLabel#chartHoverPrice {
     padding: 0px 5px;
 }
 QLabel#chartExchange {
-    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-family: "Courier New";
     font-size: 11px;
     color: rgba(255, 255, 255, 107);
     background-color: transparent;
@@ -208,7 +206,7 @@ QLabel#statLabel {
     background-color: transparent;
 }
 QLabel#statValue {
-    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-family: "Courier New";
     font-size: 12px;
     font-weight: 500;
     color: rgba(255, 255, 255, 235);
@@ -243,7 +241,7 @@ QWidget#statusBar {
     border-top: 1px solid rgba(255, 255, 255, 20);
 }
 QLabel#statusText {
-    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-family: "Courier New";
     font-size: 10px;
     color: rgba(255, 255, 255, 107);
     background-color: transparent;
@@ -293,7 +291,7 @@ QLabel#searchResultName {
     background-color: transparent;
 }
 QLabel#searchResultExchange {
-    font-family: "JetBrains Mono", "Courier New", monospace;
+    font-family: "Courier New";
     font-size: 10px;
     color: rgba(255, 255, 255, 107);
     background-color: transparent;
