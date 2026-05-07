@@ -392,7 +392,7 @@ class ChartWidget(QWidget):
             return
 
         timestamps = np.array([ts.timestamp() for ts in df.index])
-        prices = df["Close"].values.astype(float)
+        prices = np.asarray(df["Close"], dtype=float)
 
         mask = ~np.isnan(prices)
         timestamps = timestamps[mask]
@@ -434,7 +434,7 @@ class ChartWidget(QWidget):
 
         # Volume bars
         if "Volume" in df.columns:
-            volumes = df["Volume"].values.astype(float)
+            volumes = np.asarray(df["Volume"], dtype=float)
             volumes = volumes[mask]
             has_vol = np.any(volumes > 0)
             if has_vol:

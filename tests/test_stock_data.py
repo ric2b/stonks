@@ -1,9 +1,9 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pandas as pd
 import pytest
 
 from stonks.services.stock_data import (
+    HistoryData,
     batch_fetch_history,
     currency_format,
     fetch_currencies,
@@ -17,140 +17,146 @@ from stonks.services.stock_data import (
 from stonks.ui.workers import PriceUpdateWorker
 
 
-@pytest.fixture
-def mock_history_df():
-    dates = pd.date_range("2024-01-01", periods=5, freq="D")
-    return pd.DataFrame(
-        {
-            "Open": [100.0, 101.0, 102.0, 103.0, 104.0],
-            "High": [105.0, 106.0, 107.0, 108.0, 109.0],
-            "Low": [99.0, 100.0, 101.0, 102.0, 103.0],
-            "Close": [103.0, 104.0, 105.0, 106.0, 107.0],
-            "Volume": [1000000, 1100000, 1200000, 1300000, 1400000],
-        },
-        index=dates,
-    )
+def _make_chart_response(closes=None, n=5):
+    closes = closes or [103.0, 104.0, 105.0, 106.0, 107.0][:n]
+    return {
+        "timestamps": list(range(1704067200, 1704067200 + n * 86400, 86400)),
+        "open": [100.0] * n,
+        "high": [110.0] * n,
+        "low": [99.0] * n,
+        "close": closes,
+        "volume": [1000000] * n,
+        "meta": {},
+    }
 
 
 # ── fetch_history ────────────────────────────────────────────────────────────
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_history_returns_dataframe(mock_ticker_cls, mock_history_df):
-    mock_ticker_cls.return_value.history.return_value = mock_history_df
-    df = fetch_history("AAPL", "1mo", "1d")
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) == 5
-    assert "Close" in df.columns
-    mock_ticker_cls.return_value.history.assert_called_once_with(period="1mo", interval="1d")
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_fetch_history_returns_history_data(mock_chart):
+    mock_chart.return_value = _make_chart_response()
+    hd = fetch_history("AAPL", "1mo", "1d")
+    assert isinstance(hd, HistoryData)
+    assert not hd.empty
+    assert len(hd.index) == 5
+    assert "Close" in hd.columns
+    mock_chart.assert_called_once_with("AAPL", range_="1mo", interval="1d")
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_history_raises_on_empty(mock_ticker_cls):
-    mock_ticker_cls.return_value.history.return_value = pd.DataFrame()
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_fetch_history_raises_on_empty(mock_chart):
+    mock_chart.return_value = None
     with pytest.raises(ValueError, match="No data returned"):
         fetch_history("INVALID", "1mo", "1d")
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_history_caches_result(mock_ticker_cls, mock_history_df):
-    mock_ticker_cls.return_value.history.return_value = mock_history_df
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_fetch_history_caches_result(mock_chart):
+    mock_chart.return_value = _make_chart_response()
     fetch_history("AAPL", "1mo", "1d")
     fetch_history("AAPL", "1mo", "1d")
-    mock_ticker_cls.return_value.history.assert_called_once()
+    mock_chart.assert_called_once()
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_history_cache_is_keyed_by_period(mock_ticker_cls, mock_history_df):
-    mock_ticker_cls.return_value.history.return_value = mock_history_df
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_fetch_history_cache_is_keyed_by_period(mock_chart):
+    mock_chart.return_value = _make_chart_response()
     fetch_history("AAPL", "1mo", "1d")
     fetch_history("AAPL", "1y", "1d")
-    assert mock_ticker_cls.return_value.history.call_count == 2
+    assert mock_chart.call_count == 2
 
 
 @patch("stonks.services.stock_data.time.monotonic")
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_history_refetches_after_ttl(mock_ticker_cls, mock_time, mock_history_df):
-    mock_ticker_cls.return_value.history.return_value = mock_history_df
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_fetch_history_refetches_after_ttl(mock_chart, mock_time):
+    mock_chart.return_value = _make_chart_response()
     mock_time.return_value = 0.0
     fetch_history("AAPL", "1mo", "1d")
-    mock_time.return_value = 61.0  # past _HISTORY_TTL of 60s
+    mock_time.return_value = 61.0
     fetch_history("AAPL", "1mo", "1d")
-    assert mock_ticker_cls.return_value.history.call_count == 2
+    assert mock_chart.call_count == 2
 
 
 # ── fetch_info ───────────────────────────────────────────────────────────────
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_info_returns_dict(mock_ticker_cls):
-    mock_ticker_cls.return_value.info = {"marketCap": 3_000_000_000_000, "trailingPE": 32.5}
+@patch("stonks.services.stock_data.yahoo_api.fetch_quote_summary")
+@patch("stonks.services.stock_data.yahoo_api.batch_quote")
+def test_fetch_info_returns_dict(mock_quote, mock_summary):
+    mock_quote.return_value = {"AAPL": {"marketCap": 3_000_000_000_000, "trailingPE": 32.5}}
+    mock_summary.return_value = {"beta": 1.2}
     info = fetch_info("AAPL")
     assert info["marketCap"] == 3_000_000_000_000
     assert info["trailingPE"] == 32.5
+    assert info["beta"] == 1.2
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_info_caches_result(mock_ticker_cls):
-    mock_ticker_cls.return_value.info = {"symbol": "AAPL"}
+@patch("stonks.services.stock_data.yahoo_api.fetch_quote_summary")
+@patch("stonks.services.stock_data.yahoo_api.batch_quote")
+def test_fetch_info_caches_result(mock_quote, mock_summary):
+    mock_quote.return_value = {"AAPL": {"symbol": "AAPL"}}
+    mock_summary.return_value = {}
     fetch_info("AAPL")
     fetch_info("AAPL")
-    mock_ticker_cls.assert_called_once()
+    mock_quote.assert_called_once()
 
 
 @patch("stonks.services.stock_data.time.monotonic")
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_info_refetches_after_ttl(mock_ticker_cls, mock_time):
-    mock_ticker_cls.return_value.info = {"symbol": "AAPL"}
+@patch("stonks.services.stock_data.yahoo_api.fetch_quote_summary")
+@patch("stonks.services.stock_data.yahoo_api.batch_quote")
+def test_fetch_info_refetches_after_ttl(mock_quote, mock_summary, mock_time):
+    mock_quote.return_value = {"AAPL": {"symbol": "AAPL"}}
+    mock_summary.return_value = {}
     mock_time.return_value = 0.0
     fetch_info("AAPL")
-    mock_time.return_value = 301.0  # past _INFO_TTL of 300s
+    mock_time.return_value = 301.0
     fetch_info("AAPL")
-    assert mock_ticker_cls.call_count == 2
+    assert mock_quote.call_count == 2
 
 
 # ── populate_history_cache ───────────────────────────────────────────────────
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_populate_history_cache_is_found_by_fetch_history(mock_ticker_cls, mock_history_df):
-    populate_history_cache({"AAPL": mock_history_df}, "1mo", "1d")
-    df = fetch_history("AAPL", "1mo", "1d")
-    mock_ticker_cls.assert_not_called()
-    assert len(df) == 5
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_populate_history_cache_is_found_by_fetch_history(mock_chart):
+    hd = HistoryData(
+        [1704067200 + i * 86400 for i in range(5)],
+        {"Close": [100.0] * 5, "Open": [99.0] * 5, "High": [101.0] * 5,
+         "Low": [98.0] * 5, "Volume": [1e6] * 5},
+    )
+    populate_history_cache({"AAPL": hd}, "1mo", "1d")
+    result = fetch_history("AAPL", "1mo", "1d")
+    mock_chart.assert_not_called()
+    assert len(result.index) == 5
 
 
 # ── batch_fetch_history ──────────────────────────────────────────────────────
 
 
-@patch("stonks.services.stock_data.yf.download")
-def test_batch_fetch_history_single_ticker_flat_columns(mock_download):
-    dates = pd.date_range("2024-01-01", periods=3, freq="D")
-    mock_download.return_value = pd.DataFrame(
-        {"Close": [100.0, 101.0, 102.0], "Volume": [1e6, 1e6, 1e6]}, index=dates
-    )
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_batch_fetch_history_single_ticker(mock_chart):
+    mock_chart.return_value = _make_chart_response(closes=[100.0, 101.0, 102.0], n=3)
     results = batch_fetch_history(["AAPL"], "1mo", "1d")
     assert "AAPL" in results
     assert list(results["AAPL"]["Close"]) == [100.0, 101.0, 102.0]
 
 
-@patch("stonks.services.stock_data.yf.download")
-def test_batch_fetch_history_multi_ticker(mock_download):
-    dates = pd.date_range("2024-01-01", periods=3, freq="D")
-    mi = pd.MultiIndex.from_tuples(
-        [("Close", "AAPL"), ("Close", "MSFT"), ("Volume", "AAPL"), ("Volume", "MSFT")]
-    )
-    data = [[100.0, 200.0, 1e6, 2e6]] * 3
-    mock_download.return_value = pd.DataFrame(data, index=dates, columns=mi)
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_batch_fetch_history_multi_ticker(mock_chart):
+    mock_chart.side_effect = [
+        _make_chart_response(closes=[100.0, 101.0, 102.0], n=3),
+        _make_chart_response(closes=[200.0, 201.0, 202.0], n=3),
+    ]
     results = batch_fetch_history(["AAPL", "MSFT"], "1mo", "1d")
     assert set(results.keys()) == {"AAPL", "MSFT"}
-    assert results["AAPL"]["Close"].iloc[0] == 100.0
-    assert results["MSFT"]["Close"].iloc[0] == 200.0
+    assert results["AAPL"]["Close"][0] == 100.0
+    assert results["MSFT"]["Close"][0] == 200.0
 
 
-@patch("stonks.services.stock_data.yf.download")
-def test_batch_fetch_history_empty_returns_empty_dict(mock_download):
-    mock_download.return_value = pd.DataFrame()
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_batch_fetch_history_empty_returns_empty_dict(mock_chart):
+    mock_chart.return_value = None
     assert batch_fetch_history(["AAPL"], "1mo", "1d") == {}
 
 
@@ -158,12 +164,12 @@ def test_batch_fetch_history_no_tickers_returns_empty_dict():
     assert batch_fetch_history([], "1mo", "1d") == {}
 
 
-@patch("stonks.services.stock_data.yf.download")
-def test_batch_fetch_history_skips_missing_tickers(mock_download):
-    dates = pd.date_range("2024-01-01", periods=3, freq="D")
-    mi = pd.MultiIndex.from_tuples([("Close", "AAPL"), ("Volume", "AAPL")])
-    data = [[100.0, 1e6]] * 3
-    mock_download.return_value = pd.DataFrame(data, index=dates, columns=mi)
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_batch_fetch_history_skips_failed_tickers(mock_chart):
+    mock_chart.side_effect = [
+        _make_chart_response(closes=[100.0], n=1),
+        Exception("network error"),
+    ]
     results = batch_fetch_history(["AAPL", "MSFT"], "1mo", "1d")
     assert "AAPL" in results
     assert "MSFT" not in results
@@ -172,26 +178,16 @@ def test_batch_fetch_history_skips_missing_tickers(mock_download):
 # ── validate_ticker ──────────────────────────────────────────────────────────
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_validate_ticker_valid(mock_ticker_cls):
-    fast_info = MagicMock()
-    fast_info.last_price = 198.50
-    mock_ticker_cls.return_value.fast_info = fast_info
+@patch("stonks.services.stock_data.yahoo_api.validate_ticker")
+def test_validate_ticker_valid(mock_validate):
+    mock_validate.return_value = True
     assert validate_ticker("AAPL") is True
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_validate_ticker_invalid(mock_ticker_cls):
-    fast_info = MagicMock()
-    fast_info.last_price = None
-    mock_ticker_cls.return_value.fast_info = fast_info
+@patch("stonks.services.stock_data.yahoo_api.validate_ticker")
+def test_validate_ticker_invalid(mock_validate):
+    mock_validate.return_value = False
     assert validate_ticker("XYZXYZ") is False
-
-
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_validate_ticker_exception_returns_false(mock_ticker_cls):
-    mock_ticker_cls.side_effect = Exception("Network error")
-    assert validate_ticker("AAPL") is False
 
 
 # ── currency_format ──────────────────────────────────────────────────────────
@@ -255,9 +251,9 @@ def test_price_update_worker_does_not_retry_no_data_tickers(mock_fetch, mock_sle
 # ── search_tickers ──────────────────────────────────────────────────────────
 
 
-@patch("stonks.services.stock_data.yf.Search")
+@patch("stonks.services.stock_data.yahoo_api.search")
 def test_search_tickers_returns_results(mock_search):
-    mock_search.return_value.quotes = [
+    mock_search.return_value = [
         {"symbol": "AAPL", "shortname": "Apple Inc.", "exchDisp": "NASDAQ"},
         {"symbol": "AAPL.MX", "shortname": "Apple Inc.", "exchDisp": "Mexico"},
     ]
@@ -268,9 +264,9 @@ def test_search_tickers_returns_results(mock_search):
     assert results[0]["exchange"] == "NASDAQ"
 
 
-@patch("stonks.services.stock_data.yf.Search")
+@patch("stonks.services.stock_data.yahoo_api.search")
 def test_search_tickers_skips_entries_without_symbol(mock_search):
-    mock_search.return_value.quotes = [
+    mock_search.return_value = [
         {"shortname": "No symbol here"},
         {"symbol": "MSFT", "shortname": "Microsoft"},
     ]
@@ -279,10 +275,10 @@ def test_search_tickers_skips_entries_without_symbol(mock_search):
     assert results[0]["symbol"] == "MSFT"
 
 
-@patch("stonks.services.stock_data.yf.Search")
+@patch("stonks.services.stock_data.yahoo_api.search")
 def test_search_tickers_respects_max_results(mock_search):
-    mock_search.return_value.quotes = [
-        {"symbol": f"T{i}", "shortname": f"Ticker {i}"} for i in range(10)
+    mock_search.return_value = [
+        {"symbol": f"T{i}", "shortname": f"Ticker {i}"} for i in range(3)
     ]
     results = search_tickers("test", max_results=3)
     assert len(results) == 3
@@ -291,23 +287,23 @@ def test_search_tickers_respects_max_results(mock_search):
 # ── fetch_names ─────────────────────────────────────────────────────────────
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_names_returns_names(mock_ticker_cls):
-    mock_ticker_cls.return_value.info = {"longName": "Apple Inc."}
+@patch("stonks.services.stock_data.yahoo_api.batch_quote")
+def test_fetch_names_returns_names(mock_quote):
+    mock_quote.return_value = {"AAPL": {"longName": "Apple Inc."}}
     names = fetch_names(["AAPL"])
     assert names == {"AAPL": "Apple Inc."}
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_names_uses_shortname_fallback(mock_ticker_cls):
-    mock_ticker_cls.return_value.info = {"shortName": "Apple"}
+@patch("stonks.services.stock_data.yahoo_api.batch_quote")
+def test_fetch_names_uses_shortname_fallback(mock_quote):
+    mock_quote.return_value = {"AAPL": {"shortName": "Apple"}}
     names = fetch_names(["AAPL"])
     assert names == {"AAPL": "Apple"}
 
 
-@patch("stonks.services.stock_data.yf.Ticker")
-def test_fetch_names_skips_tickers_with_no_name(mock_ticker_cls):
-    mock_ticker_cls.return_value.info = {}
+@patch("stonks.services.stock_data.yahoo_api.batch_quote")
+def test_fetch_names_skips_tickers_with_no_name(mock_quote):
+    mock_quote.return_value = {"AAPL": {}}
     names = fetch_names(["AAPL"])
     assert names == {}
 
