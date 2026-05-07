@@ -1,9 +1,11 @@
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 
-import pandas as pd
-import yfinance as yf
+import numpy as np
+
+from stonks.services import yahoo_api
 
 logger = logging.getLogger(__name__)
 
@@ -50,25 +52,60 @@ def currency_format(code: str) -> tuple[str, str]:
     return (symbol, "")
 
 
+class HistoryData:
+    """Lightweight replacement for pandas DataFrame used by the chart widget."""
+
+    def __init__(self, timestamps: list[int | float], ohlcv: dict[str, list]):
+        self._timestamps = timestamps
+        self._ohlcv = ohlcv
+        self.index = [datetime.fromtimestamp(ts, tz=timezone.utc) for ts in timestamps]
+
+    @property
+    def empty(self) -> bool:
+        return len(self._timestamps) == 0
+
+    @property
+    def columns(self) -> list[str]:
+        return list(self._ohlcv.keys())
+
+    def __getitem__(self, key: str) -> np.ndarray:
+        return np.array(self._ohlcv[key], dtype=float)
+
+
 _info_cache: dict[str, tuple[dict, float]] = {}
-_history_cache: dict[tuple, tuple[pd.DataFrame, float]] = {}
+_history_cache: dict[tuple, tuple[HistoryData, float]] = {}
 _INFO_TTL = 300.0
 _HISTORY_TTL = 60.0
 
 
-def fetch_history(ticker: str, period: str, interval: str) -> pd.DataFrame:
+def fetch_history(ticker: str, period: str, interval: str) -> HistoryData:
     key = (ticker, period, interval)
     now = time.monotonic()
     cached = _history_cache.get(key)
     if cached is not None and now - cached[1] < _HISTORY_TTL:
         return cached[0]
-    t = yf.Ticker(ticker)
-    df = t.history(period=period, interval=interval)
-    if df.empty:
+    raw = yahoo_api.fetch_chart(ticker, range_=period, interval=interval)
+    if raw is None:
+        raise ValueError(f"No data returned for {ticker}")
+    hd = _chart_to_history(raw)
+    if hd.empty:
         raise ValueError(f"No data returned for {ticker}")
     _evict_history_cache(now)
-    _history_cache[key] = (df, now)
-    return df
+    _history_cache[key] = (hd, now)
+    return hd
+
+
+def _chart_to_history(raw: dict) -> HistoryData:
+    return HistoryData(
+        raw["timestamps"],
+        {
+            "Close": raw["close"],
+            "Open": raw["open"],
+            "High": raw["high"],
+            "Low": raw["low"],
+            "Volume": raw["volume"],
+        },
+    )
 
 
 def fetch_info(ticker: str, max_age: float = _INFO_TTL) -> dict:
@@ -76,46 +113,34 @@ def fetch_info(ticker: str, max_age: float = _INFO_TTL) -> dict:
     cached = _info_cache.get(ticker)
     if cached is not None and now - cached[1] < max_age:
         return cached[0]
-    t = yf.Ticker(ticker)
-    result = t.info
-    _info_cache[ticker] = (result, now)
-    return result
+    quote = yahoo_api.batch_quote([ticker]).get(ticker, {})
+    summary = yahoo_api.fetch_quote_summary(ticker)
+    summary.update(quote)
+    _info_cache[ticker] = (summary, now)
+    return summary
 
 
-def batch_fetch_history(tickers: list[str], period: str, interval: str) -> dict[str, pd.DataFrame]:
-    """Fetch history for multiple tickers in a single yfinance call."""
+def batch_fetch_history(tickers: list[str], period: str, interval: str) -> dict[str, HistoryData]:
     if not tickers:
         return {}
-    df = yf.download(tickers, period=period, interval=interval, progress=False)
-    if df.empty:
-        return {}
-
     results = {}
-    if df.columns.nlevels == 1:
-        # Flat columns — single ticker without MultiIndex
-        if len(tickers) == 1:
-            clean = df.dropna(how="all")
-            if not clean.empty:
-                results[tickers[0]] = clean
-    else:
-        # MultiIndex (price_type, ticker) — standard for yfinance 1.x
-        for ticker in tickers:
-            try:
-                ticker_df = df.xs(ticker, level=1, axis=1).dropna(how="all")
-                if not ticker_df.empty:
-                    results[ticker] = ticker_df
-            except KeyError:
-                pass
-
+    for ticker in tickers:
+        try:
+            raw = yahoo_api.fetch_chart(ticker, range_=period, interval=interval)
+            if raw is not None:
+                hd = _chart_to_history(raw)
+                if not hd.empty:
+                    results[ticker] = hd
+        except Exception:
+            logger.debug("Failed to fetch history for %s", ticker)
     return results
 
 
-def populate_history_cache(results: dict[str, pd.DataFrame], period: str, interval: str) -> None:
-    """Store batch-fetched DataFrames into the in-memory history cache."""
+def populate_history_cache(results: dict[str, HistoryData], period: str, interval: str) -> None:
     now = time.monotonic()
     _evict_history_cache(now)
-    for ticker, df in results.items():
-        _history_cache[(ticker, period, interval)] = (df, now)
+    for ticker, hd in results.items():
+        _history_cache[(ticker, period, interval)] = (hd, now)
 
 
 def is_history_cached(ticker: str, period: str, interval: str) -> bool:
@@ -135,65 +160,45 @@ def _evict_history_cache(now: float) -> None:
 _name_cache: dict[str, str] = {}
 
 
-def _fetch_name_for_ticker(ticker: str) -> tuple[str, str]:
-    if ticker in _name_cache:
-        return ticker, _name_cache[ticker]
-    info = fetch_info(ticker)
-    name = info.get("longName") or info.get("shortName") or ""
-    if name:
-        _name_cache[ticker] = name
-    return ticker, name
-
-
 def fetch_names(tickers: list[str]) -> dict[str, str]:
-    results = {}
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        futures = {pool.submit(_fetch_name_for_ticker, t): t for t in tickers}
-        for future in as_completed(futures):
-            try:
-                ticker, name = future.result()
-                if name:
-                    results[ticker] = name
-            except Exception:
-                logger.debug("Failed to fetch name for %s", futures[future])
-    return results
+    uncached = [t for t in tickers if t not in _name_cache]
+    if uncached:
+        quotes = yahoo_api.batch_quote(uncached)
+        for sym, info in quotes.items():
+            name = info.get("longName") or info.get("shortName") or ""
+            if name:
+                _name_cache[sym] = name
+    return {t: _name_cache[t] for t in tickers if t in _name_cache}
 
 
 def fetch_prices(tickers: list[str]) -> tuple[dict[str, tuple[float, float]], set[str]]:
-    """Return ({ticker: (price, change_pct)}, no_data_tickers).
-
-    Tickers in no_data got a valid response but had no price (delisted/invalid).
-    Tickers absent from both had a transient error and may be worth retrying.
-    """
+    """Return ({ticker: (price, change_pct)}, no_data_tickers)."""
     results = {}
     no_data: set[str] = set()
-
-    def _fetch_one(ticker: str) -> tuple[str, float | None, float | None]:
-        info = fetch_info(ticker, max_age=_HISTORY_TTL)
+    try:
+        quotes = yahoo_api.batch_quote(tickers)
+    except Exception:
+        logger.debug("Batch price fetch failed")
+        return results, no_data
+    for ticker in tickers:
+        info = quotes.get(ticker)
+        if info is None:
+            continue
         price = info.get("regularMarketPrice")
+        if price is None:
+            no_data.add(ticker)
+            continue
         change_pct = info.get("regularMarketChangePercent")
-        if price is not None and change_pct is None:
+        if change_pct is None:
             prev = info.get("regularMarketPreviousClose")
             if prev and prev != 0:
                 change_pct = ((price - prev) / prev) * 100
-        return ticker, price, change_pct
-
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        futures = {pool.submit(_fetch_one, t): t for t in tickers}
-        for future in as_completed(futures):
-            try:
-                ticker, price, change_pct = future.result()
-                if price is None:
-                    no_data.add(ticker)
-                    continue
-                results[ticker] = (price, change_pct if change_pct is not None else 0.0)
-            except Exception:
-                logger.debug("Failed to fetch price for %s", futures[future])
+        results[ticker] = (price, change_pct if change_pct is not None else 0.0)
+        _info_cache[ticker] = (info, time.monotonic())
     return results, no_data
 
 
 def fetch_currencies(tickers: list[str]) -> dict[str, str]:
-    """Return currency codes for tickers whose info is already cached."""
     results = {}
     for ticker in tickers:
         cached = _info_cache.get(ticker)
@@ -205,9 +210,9 @@ def fetch_currencies(tickers: list[str]) -> dict[str, str]:
 
 
 def search_tickers(query: str, max_results: int = 5) -> list[dict]:
-    results = yf.Search(query, max_results=max_results)
+    raw = yahoo_api.search(query, max_results=max_results)
     out = []
-    for q in results.quotes[:max_results]:
+    for q in raw:
         sym = q.get("symbol", "")
         if not sym:
             continue
@@ -230,10 +235,9 @@ def fetch_news(ticker: str, max_items: int = 8) -> list[dict]:
     cached = _news_cache.get(ticker)
     if cached is not None and now - cached[1] < _NEWS_TTL:
         return cached[0]
-    t = yf.Ticker(ticker)
-    raw = t.news or []
+    raw = yahoo_api.fetch_news(ticker, max_items=max_items)
     items = []
-    for entry in raw[:max_items]:
+    for entry in raw:
         c = entry.get("content", {})
         title = c.get("title", "")
         if not title:
@@ -260,10 +264,4 @@ def fetch_news(ticker: str, max_items: int = 8) -> list[dict]:
 
 
 def validate_ticker(ticker: str) -> bool:
-    try:
-        t = yf.Ticker(ticker)
-        info = t.fast_info
-        return hasattr(info, "last_price") and info.last_price is not None
-    except Exception:
-        logger.debug("Ticker validation failed for %s", ticker)
-        return False
+    return yahoo_api.validate_ticker(ticker)
