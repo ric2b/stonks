@@ -18,7 +18,7 @@ from stonks.services.stock_data import is_history_cached
 from stonks.ui.chart_widget import ChartWidget
 from stonks.ui.detail_view import DetailView, NewsWidget
 from stonks.ui.watchlist import WatchlistWidget
-from stonks.ui.workers import PrefetchWorker, shutdown_workers
+from stonks.ui.workers import PrefetchWorker, shutdown_workers, track_worker
 
 
 class _StatusBar(QWidget):
@@ -201,8 +201,7 @@ class MainWindow(QMainWindow):
         if not tickers:
             return
         worker = PrefetchWorker(tickers, yf_period, yf_interval)
-        worker.finished.connect(lambda w=worker: self._workers.remove(w) if w in self._workers else None)
-        self._workers.append(worker)
+        track_worker(self._workers, worker)
         worker.start()
 
     def closeEvent(self, event):

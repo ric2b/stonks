@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from stonks.services.stock_data import currency_format
-from stonks.ui.workers import InfoWorker, NewsWorker, shutdown_workers
+from stonks.ui.workers import InfoWorker, NewsWorker, shutdown_workers, track_worker
 
 STAT_COLUMNS = [
     [
@@ -189,9 +189,7 @@ class NewsWidget(QWidget):
 
         worker = NewsWorker(ticker)
         worker.finished.connect(lambda items, t=ticker: self._on_news_received(items, t))
-        worker.finished.connect(lambda _items, w=worker: self._workers.remove(w) if w in self._workers else None)
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
-        self._workers.append(worker)
+        track_worker(self._workers, worker)
         worker.start()
 
     def _clear_news(self):
@@ -281,9 +279,7 @@ class DetailView(QWidget):
 
         worker = InfoWorker(ticker)
         worker.finished.connect(lambda info, t=ticker: self._on_info_received(info, t))
-        worker.finished.connect(lambda _info, w=worker: self._workers.remove(w) if w in self._workers else None)
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
-        self._workers.append(worker)
+        track_worker(self._workers, worker)
         worker.start()
 
     def _on_info_received(self, info: dict, ticker: str):

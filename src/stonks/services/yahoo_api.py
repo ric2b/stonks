@@ -27,9 +27,7 @@ def _fetch_fresh_session() -> tuple[urllib.request.OpenerDirector, str]:
         opener.open("https://fc.yahoo.com")
     except urllib.error.HTTPError:
         pass
-    crumb = opener.open(
-        "https://query1.finance.yahoo.com/v1/test/getcrumb"
-    ).read().decode()
+    crumb = opener.open("https://query1.finance.yahoo.com/v1/test/getcrumb").read().decode()
     return opener, crumb
 
 
@@ -142,7 +140,10 @@ def _normalize_quote(q: dict) -> dict:
     return out
 
 
-def fetch_quote_summary(ticker: str, modules: str = "price,summaryDetail,defaultKeyStatistics") -> dict:
+def fetch_quote_summary(
+    ticker: str,
+    modules: str = "price,summaryDetail,defaultKeyStatistics",
+) -> dict:
     """Fetch detailed info for a single ticker via quoteSummary.
 
     Returns a flat dict with raw numeric values.

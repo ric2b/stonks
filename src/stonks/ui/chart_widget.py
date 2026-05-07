@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from stonks.config import INTRADAY_INTERVALS, TIME_RANGES
 from stonks.models.database import set_setting
 from stonks.services.stock_data import currency_format
-from stonks.ui.workers import HistoryWorker, shutdown_workers
+from stonks.ui.workers import HistoryWorker, shutdown_workers, track_worker
 
 _DASH = Qt.PenStyle.DashLine
 _DAILY_INTERVALS = {"1d", "5d", "1wk", "1mo", "3mo"}
@@ -269,9 +269,7 @@ class ChartWidget(QWidget):
         worker = HistoryWorker(ticker, yf_period, yf_interval)
         worker.finished.connect(lambda df, t=ticker: self._on_data_received(df, t))
         worker.error.connect(lambda _err, t=ticker: self._on_data_error(t))
-        worker.finished.connect(lambda _df, w=worker: self._workers.remove(w) if w in self._workers else None)
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
-        self._workers.append(worker)
+        track_worker(self._workers, worker)
         worker.start()
 
     def set_company_info(self, ticker: str, name: str, exchange: str, currency: str):

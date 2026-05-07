@@ -1,6 +1,5 @@
 import logging
 import time
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
@@ -121,24 +120,28 @@ def fetch_info(ticker: str, max_age: float = _INFO_TTL) -> dict:
     return summary
 
 
-def batch_fetch_history(
-    tickers: list[str], period: str, interval: str,
-    cancelled: Callable[[], bool] | None = None,
-) -> dict[str, HistoryData]:
+def _fetch_one_history(ticker: str, period: str, interval: str) -> tuple[str, HistoryData | None]:
+    try:
+        raw = yahoo_api.fetch_chart(ticker, range_=period, interval=interval)
+        if raw is not None:
+            hd = _chart_to_history(raw)
+            if not hd.empty:
+                return ticker, hd
+    except Exception:
+        logger.debug("Failed to fetch history for %s", ticker)
+    return ticker, None
+
+
+def batch_fetch_history(tickers: list[str], period: str, interval: str) -> dict[str, HistoryData]:
     if not tickers:
         return {}
     results = {}
-    for ticker in tickers:
-        if cancelled is not None and cancelled():
-            break
-        try:
-            raw = yahoo_api.fetch_chart(ticker, range_=period, interval=interval)
-            if raw is not None:
-                hd = _chart_to_history(raw)
-                if not hd.empty:
-                    results[ticker] = hd
-        except Exception:
-            logger.debug("Failed to fetch history for %s", ticker)
+    with ThreadPoolExecutor(max_workers=min(len(tickers), 8)) as pool:
+        futures = {pool.submit(_fetch_one_history, t, period, interval): t for t in tickers}
+        for future in as_completed(futures):
+            ticker, hd = future.result()
+            if hd is not None:
+                results[ticker] = hd
     return results
 
 
