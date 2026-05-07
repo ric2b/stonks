@@ -37,18 +37,21 @@ jobs:
         run: |
           VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           PLIST=dist/Stonks.app/Contents/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION" "$PLIST" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
 
       - name: Create DMG
         run: |
           hdiutil create -volname Stonks -srcfolder dist/Stonks.app \
             -ov -format UDZO dist/stonks-macos.dmg
 
-      - name: Upload to release
-        uses: softprops/action-gh-release@v3
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
         with:
-          files: dist/stonks-macos.dmg
+          name: macos-dmg
+          path: dist/stonks-macos.dmg
 
   appimage:
     runs-on: ubuntu-24.04
@@ -110,10 +113,11 @@ jobs:
           ARCH=x86_64 ./appimagetool-x86_64.AppImage --no-appstream \
             Stonks.AppDir dist/stonks-x86_64.AppImage
 
-      - name: Upload to release
-        uses: softprops/action-gh-release@v3
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
         with:
-          files: dist/stonks-x86_64.AppImage
+          name: linux-appimage
+          path: dist/stonks-x86_64.AppImage
 
   snap:
     runs-on: ubuntu-latest
@@ -124,8 +128,24 @@ jobs:
         uses: snapcore/action-build@v1
         id: build
 
-      - name: Upload to release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-snap
+          path: ${{ steps.build.outputs.snap }}
+
+  release:
+    needs: [macos, appimage, snap]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
-          files: ${{ steps.build.outputs.snap }}
+          files: artifacts/*
 
