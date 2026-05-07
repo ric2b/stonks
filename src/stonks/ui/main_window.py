@@ -2,17 +2,18 @@ import sqlite3
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QSplitter,
     QVBoxLayout,
     QWidget,
 )
 
-from stonks.config import TIME_RANGES
+from stonks.config import APP_NAME, APP_VERSION, TIME_RANGES
 from stonks.models.database import get_setting, set_setting, update_ticker_meta
 from stonks.services.stock_data import is_history_cached
 from stonks.ui.chart_widget import ChartWidget
@@ -160,6 +161,7 @@ class MainWindow(QMainWindow):
 
         self._restore_session()
         self._setup_shortcuts()
+        self._setup_menus()
 
         self.watchlist.list_widget.setFocus()
 
@@ -178,6 +180,21 @@ class MainWindow(QMainWindow):
 
         QShortcut(QKeySequence(Qt.Key.Key_Left), self, lambda: self.chart.step_range(-1))
         QShortcut(QKeySequence(Qt.Key.Key_Right), self, lambda: self.chart.step_range(1))
+
+    def _setup_menus(self):
+        about = QAction(f"About {APP_NAME}", self)
+        about.setMenuRole(QAction.MenuRole.AboutRole)
+        about.triggered.connect(self._show_about)
+        self.menuBar().addMenu("Help").addAction(about)
+
+    def _show_about(self):
+        QMessageBox.about(
+            self,
+            f"About {APP_NAME}",
+            f"<h3>{APP_NAME}</h3>"
+            f"<p>Version {APP_VERSION}</p>"
+            f"<p>Desktop stock tracker for Linux and macOS.</p>",
+        )
 
     def _restore_session(self):
         last_period = get_setting(self.conn, "last_period", "1M")

@@ -1,7 +1,13 @@
 import os
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 APP_NAME = "Stonks"
+
+try:
+    APP_VERSION = version("stonks")
+except PackageNotFoundError:
+    APP_VERSION = "dev"
 
 DB_DIR = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "stonks"
 DB_PATH = DB_DIR / "stonks.db"

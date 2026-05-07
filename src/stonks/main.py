@@ -10,7 +10,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from stonks.config import APP_NAME, DB_PATH
+from stonks.config import APP_NAME, APP_VERSION, DB_PATH
 from stonks.models.database import init_db
 from stonks.ui.main_window import MainWindow
 from stonks.ui.style import DARK_STYLE
@@ -37,6 +37,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
+    app.setApplicationVersion(APP_VERSION)
     app.setDesktopFileName("com.stonks.Stonks")
     app.setStyleSheet(DARK_STYLE)
     if _ICON_PATH.exists():

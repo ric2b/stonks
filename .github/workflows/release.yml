@@ -33,6 +33,13 @@ jobs:
           uv run pyinstaller --windowed --name Stonks --icon stonks.icns \
             --collect-all pyqtgraph src/stonks/main.py
 
+      - name: Set bundle version
+        run: |
+          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          PLIST=dist/Stonks.app/Contents/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
+
       - name: Create DMG
         run: |
           hdiutil create -volname Stonks -srcfolder dist/Stonks.app \
