@@ -1,5 +1,6 @@
 import logging
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
@@ -120,11 +121,16 @@ def fetch_info(ticker: str, max_age: float = _INFO_TTL) -> dict:
     return summary
 
 
-def batch_fetch_history(tickers: list[str], period: str, interval: str) -> dict[str, HistoryData]:
+def batch_fetch_history(
+    tickers: list[str], period: str, interval: str,
+    cancelled: Callable[[], bool] | None = None,
+) -> dict[str, HistoryData]:
     if not tickers:
         return {}
     results = {}
     for ticker in tickers:
+        if cancelled is not None and cancelled():
+            break
         try:
             raw = yahoo_api.fetch_chart(ticker, range_=period, interval=interval)
             if raw is not None:

@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from stonks.services.stock_data import currency_format
-from stonks.ui.workers import InfoWorker, NewsWorker
+from stonks.ui.workers import InfoWorker, NewsWorker, shutdown_workers
 
 STAT_COLUMNS = [
     [
@@ -181,10 +181,7 @@ class NewsWidget(QWidget):
         outer.addWidget(scroll, 1)
 
     def shutdown(self):
-        for w in self._workers:
-            w.quit()
-            w.wait(2000)
-        self._workers.clear()
+        shutdown_workers(self._workers)
 
     def update_news(self, ticker: str):
         self._current_ticker = ticker
@@ -275,10 +272,7 @@ class DetailView(QWidget):
         outer.addWidget(cols_widget, 1)
 
     def shutdown(self):
-        for w in self._workers:
-            w.quit()
-            w.wait(2000)
-        self._workers.clear()
+        shutdown_workers(self._workers)
 
     def update_detail(self, ticker: str):
         self._current_ticker = ticker
