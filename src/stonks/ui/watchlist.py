@@ -23,7 +23,7 @@ from stonks.models.database import (
     update_ticker_meta,
 )
 from stonks.services.stock_data import currency_format
-from stonks.ui.workers import NameFetchWorker, PriceUpdateWorker, SearchWorker, ValidateWorker
+from stonks.ui.workers import NameFetchWorker, PriceUpdateWorker, SearchWorker, ValidateWorker, shutdown_workers
 
 
 class WatchlistItemWidget(QWidget):
@@ -447,10 +447,7 @@ class WatchlistWidget(QWidget):
     def shutdown(self):
         self.refresh_timer.stop()
         self._search_timer.stop()
-        for w in self._workers:
-            w.quit()
-            w.wait(2000)
-        self._workers.clear()
+        shutdown_workers(self._workers)
 
     def focus_search(self):
         self.search_input.setFocus()

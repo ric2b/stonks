@@ -14,6 +14,7 @@ from stonks.config import APP_NAME, DB_PATH
 from stonks.models.database import init_db
 from stonks.ui.main_window import MainWindow
 from stonks.ui.style import DARK_STYLE
+from stonks.ui.workers import wait_for_closing_workers
 
 # Relies on source tree layout; distributed builds embed the icon at build time.
 _ICON_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "com.stonks.Stonks.svg"
@@ -51,7 +52,9 @@ def main():
     window = MainWindow(conn)
     window.show()
 
-    sys.exit(app.exec())
+    ret = app.exec()
+    wait_for_closing_workers()
+    sys.exit(ret)
 
 
 if __name__ == "__main__":

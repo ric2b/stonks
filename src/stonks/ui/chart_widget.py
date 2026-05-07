@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from stonks.config import INTRADAY_INTERVALS, TIME_RANGES
 from stonks.models.database import set_setting
 from stonks.services.stock_data import currency_format
-from stonks.ui.workers import HistoryWorker
+from stonks.ui.workers import HistoryWorker, shutdown_workers
 
 _DASH = Qt.PenStyle.DashLine
 _DAILY_INTERVALS = {"1d", "5d", "1wk", "1mo", "3mo"}
@@ -298,10 +298,7 @@ class ChartWidget(QWidget):
 
     def shutdown(self):
         self._refresh_timer.stop()
-        for w in self._workers:
-            w.quit()
-            w.wait(2000)
-        self._workers.clear()
+        shutdown_workers(self._workers)
 
     def _hide_crosshair(self):
         self._vline.setVisible(False)

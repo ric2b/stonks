@@ -18,6 +18,22 @@ from stonks.services.stock_data import (
 logger = logging.getLogger(__name__)
 
 
+_closing_workers: list[QThread] = []
+
+
+def shutdown_workers(workers: list[QThread]) -> None:
+    for w in workers:
+        w.requestInterruption()
+        w.quit()
+    _closing_workers.extend(w for w in workers if w.isRunning())
+    workers.clear()
+
+
+def wait_for_closing_workers(timeout_ms: int = 2000) -> None:
+    for w in _closing_workers:
+        w.wait(timeout_ms)
+
+
 class ValidateWorker(QThread):
     finished = Signal(bool, str)
     error = Signal(str)
@@ -104,7 +120,7 @@ class PriceUpdateWorker(QThread):
             results, no_data = fetch_prices(self.tickers)
             missing = [t for t in self.tickers if t not in results and t not in no_data]
             delay = 0.5
-            while missing:
+            while missing and not self.isInterruptionRequested():
                 time.sleep(delay)
                 delay = min(delay * 2, 10)
                 new_results, new_no_data = fetch_prices(missing)
@@ -164,7 +180,10 @@ class PrefetchWorker(QThread):
 
     def run(self):
         try:
-            results = batch_fetch_history(self.tickers, self.period, self.interval)
+            results = batch_fetch_history(
+                self.tickers, self.period, self.interval,
+                cancelled=self.isInterruptionRequested,
+            )
             populate_history_cache(results, self.period, self.interval)
         except Exception as e:
             logger.debug("Prefetch failed: %s", e)

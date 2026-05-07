@@ -18,7 +18,7 @@ from stonks.services.stock_data import is_history_cached
 from stonks.ui.chart_widget import ChartWidget
 from stonks.ui.detail_view import DetailView, NewsWidget
 from stonks.ui.watchlist import WatchlistWidget
-from stonks.ui.workers import PrefetchWorker
+from stonks.ui.workers import PrefetchWorker, shutdown_workers
 
 
 class _StatusBar(QWidget):
@@ -210,9 +210,7 @@ class MainWindow(QMainWindow):
         self.chart.shutdown()
         self.detail_view.shutdown()
         self.news_widget.shutdown()
-        for w in self._workers:
-            w.quit()
-            w.wait(2000)
+        shutdown_workers(self._workers)
         super().closeEvent(event)
 
     def _on_info_received(self, ticker: str, name: str, exchange: str, currency: str):
