@@ -23,7 +23,14 @@ from stonks.models.database import (
     update_ticker_meta,
 )
 from stonks.services.stock_data import currency_format
-from stonks.ui.workers import NameFetchWorker, PriceUpdateWorker, SearchWorker, ValidateWorker, shutdown_workers
+from stonks.ui.workers import (
+    NameFetchWorker,
+    PriceUpdateWorker,
+    SearchWorker,
+    ValidateWorker,
+    shutdown_workers,
+    track_worker,
+)
 
 
 class WatchlistItemWidget(QWidget):
@@ -223,9 +230,7 @@ class WatchlistWidget(QWidget):
 
         worker = SearchWorker(query)
         worker.finished.connect(self._on_search_results)
-        worker.finished.connect(lambda _r, w=worker: self._workers.remove(w) if w in self._workers else None)
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
-        self._workers.append(worker)
+        track_worker(self._workers, worker)
         worker.start()
 
     def _on_search_results(self, results: list):
@@ -278,9 +283,7 @@ class WatchlistWidget(QWidget):
         worker = ValidateWorker(ticker)
         worker.finished.connect(self._on_ticker_validated)
         worker.error.connect(self._on_validate_error)
-        worker.finished.connect(lambda _v, _t, w=worker: self._workers.remove(w) if w in self._workers else None)
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
-        self._workers.append(worker)
+        track_worker(self._workers, worker)
         worker.start()
 
     def _on_ticker_validated(self, valid: bool, ticker: str):
@@ -369,8 +372,7 @@ class WatchlistWidget(QWidget):
             return
         worker = NameFetchWorker(tickers)
         worker.finished.connect(self._on_names_fetched)
-        worker.finished.connect(lambda _n, _c, w=worker: self._workers.remove(w) if w in self._workers else None)
-        self._workers.append(worker)
+        track_worker(self._workers, worker)
         worker.start()
 
     def _on_names_fetched(self, names: dict, currencies: dict):
@@ -424,9 +426,7 @@ class WatchlistWidget(QWidget):
             return
         worker = PriceUpdateWorker(tickers)
         worker.finished.connect(self._on_prices_updated)
-        worker.finished.connect(lambda _prices, w=worker: self._workers.remove(w) if w in self._workers else None)
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
-        self._workers.append(worker)
+        track_worker(self._workers, worker)
         worker.start()
 
     def _on_prices_updated(self, prices: dict):

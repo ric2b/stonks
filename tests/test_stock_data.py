@@ -122,8 +122,13 @@ def test_fetch_info_refetches_after_ttl(mock_quote, mock_summary, mock_time):
 def test_populate_history_cache_is_found_by_fetch_history(mock_chart):
     hd = HistoryData(
         [1704067200 + i * 86400 for i in range(5)],
-        {"Close": [100.0] * 5, "Open": [99.0] * 5, "High": [101.0] * 5,
-         "Low": [98.0] * 5, "Volume": [1e6] * 5},
+        {
+            "Close": [100.0] * 5,
+            "Open": [99.0] * 5,
+            "High": [101.0] * 5,
+            "Low": [98.0] * 5,
+            "Volume": [1e6] * 5,
+        },
     )
     populate_history_cache({"AAPL": hd}, "1mo", "1d")
     result = fetch_history("AAPL", "1mo", "1d")
@@ -277,9 +282,7 @@ def test_search_tickers_skips_entries_without_symbol(mock_search):
 
 @patch("stonks.services.stock_data.yahoo_api.search")
 def test_search_tickers_respects_max_results(mock_search):
-    mock_search.return_value = [
-        {"symbol": f"T{i}", "shortname": f"Ticker {i}"} for i in range(3)
-    ]
+    mock_search.return_value = [{"symbol": f"T{i}", "shortname": f"Ticker {i}"} for i in range(3)]
     results = search_tickers("test", max_results=3)
     assert len(results) == 3
 

@@ -21,6 +21,18 @@ logger = logging.getLogger(__name__)
 _closing_workers: list[QThread] = []
 
 
+def track_worker(workers: list[QThread], worker: QThread) -> None:
+    def remove(*_args):
+        if worker in workers:
+            workers.remove(worker)
+
+    for sig_name in ("finished", "error"):
+        sig = getattr(worker, sig_name, None)
+        if sig is not None:
+            sig.connect(remove)
+    workers.append(worker)
+
+
 def shutdown_workers(workers: list[QThread]) -> None:
     for w in workers:
         w.requestInterruption()
@@ -40,7 +52,7 @@ class ValidateWorker(QThread):
 
     def __init__(self, ticker: str):
         super().__init__()
-        self.setObjectName(f'ValidateWorker({ticker})')
+        self.setObjectName(f"ValidateWorker({ticker})")
         self.ticker = ticker
 
     def run(self):
@@ -57,7 +69,7 @@ class HistoryWorker(QThread):
 
     def __init__(self, ticker: str, period: str, interval: str):
         super().__init__()
-        self.setObjectName(f'HistoryWorker({ticker},{period},{interval})')
+        self.setObjectName(f"HistoryWorker({ticker},{period},{interval})")
         self.ticker = ticker
         self.period = period
         self.interval = interval
@@ -78,7 +90,7 @@ class InfoWorker(QThread):
 
     def __init__(self, ticker: str):
         super().__init__()
-        self.setObjectName(f'InfoWorker({ticker})')
+        self.setObjectName(f"InfoWorker({ticker})")
         self.ticker = ticker
 
     def run(self):
@@ -95,7 +107,7 @@ class SearchWorker(QThread):
 
     def __init__(self, query: str):
         super().__init__()
-        self.setObjectName(f'SearchWorker({query})')
+        self.setObjectName(f"SearchWorker({query})")
         self.query = query
 
     def run(self):
@@ -112,7 +124,7 @@ class PriceUpdateWorker(QThread):
 
     def __init__(self, tickers: list[str]):
         super().__init__()
-        self.setObjectName(f'PriceUpdateWorker({",".join(tickers)})')
+        self.setObjectName(f"PriceUpdateWorker({','.join(tickers)})")
         self.tickers = tickers
 
     def run(self):
@@ -138,7 +150,7 @@ class NameFetchWorker(QThread):
 
     def __init__(self, tickers: list[str]):
         super().__init__()
-        self.setObjectName(f'NameFetchWorker({",".join(tickers)})')
+        self.setObjectName(f"NameFetchWorker({','.join(tickers)})")
         self.tickers = tickers
 
     def run(self):
@@ -156,7 +168,7 @@ class NewsWorker(QThread):
 
     def __init__(self, ticker: str):
         super().__init__()
-        self.setObjectName(f'NewsWorker({ticker})')
+        self.setObjectName(f"NewsWorker({ticker})")
         self.ticker = ticker
 
     def run(self):
@@ -173,17 +185,14 @@ class PrefetchWorker(QThread):
 
     def __init__(self, tickers: list[str], period: str, interval: str):
         super().__init__()
-        self.setObjectName(f'PrefetchWorker({",".join(tickers)})')
+        self.setObjectName(f"PrefetchWorker({','.join(tickers)})")
         self.tickers = tickers
         self.period = period
         self.interval = interval
 
     def run(self):
         try:
-            results = batch_fetch_history(
-                self.tickers, self.period, self.interval,
-                cancelled=self.isInterruptionRequested,
-            )
+            results = batch_fetch_history(self.tickers, self.period, self.interval)
             populate_history_cache(results, self.period, self.interval)
         except Exception as e:
             logger.debug("Prefetch failed: %s", e)
