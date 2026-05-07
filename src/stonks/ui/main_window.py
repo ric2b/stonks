@@ -1,4 +1,5 @@
 import sqlite3
+import sys
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer
@@ -161,7 +162,8 @@ class MainWindow(QMainWindow):
 
         self._restore_session()
         self._setup_shortcuts()
-        self._setup_menus()
+        if sys.platform == 'darwin':
+            self._setup_menus()
 
         self.watchlist.list_widget.setFocus()
 
