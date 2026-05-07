@@ -223,8 +223,8 @@ class WatchlistWidget(QWidget):
 
         worker = SearchWorker(query)
         worker.finished.connect(self._on_search_results)
-        worker.finished.connect(lambda _r, w=worker: self._workers.remove(w))
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w))
+        worker.finished.connect(lambda _r, w=worker: self._workers.remove(w) if w in self._workers else None)
+        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
         self._workers.append(worker)
         worker.start()
 
@@ -278,8 +278,8 @@ class WatchlistWidget(QWidget):
         worker = ValidateWorker(ticker)
         worker.finished.connect(self._on_ticker_validated)
         worker.error.connect(self._on_validate_error)
-        worker.finished.connect(lambda _v, _t, w=worker: self._workers.remove(w))
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w))
+        worker.finished.connect(lambda _v, _t, w=worker: self._workers.remove(w) if w in self._workers else None)
+        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
         self._workers.append(worker)
         worker.start()
 
@@ -369,7 +369,7 @@ class WatchlistWidget(QWidget):
             return
         worker = NameFetchWorker(tickers)
         worker.finished.connect(self._on_names_fetched)
-        worker.finished.connect(lambda _n, _c, w=worker: self._workers.remove(w))
+        worker.finished.connect(lambda _n, _c, w=worker: self._workers.remove(w) if w in self._workers else None)
         self._workers.append(worker)
         worker.start()
 
@@ -424,8 +424,8 @@ class WatchlistWidget(QWidget):
             return
         worker = PriceUpdateWorker(tickers)
         worker.finished.connect(self._on_prices_updated)
-        worker.finished.connect(lambda _prices, w=worker: self._workers.remove(w))
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w))
+        worker.finished.connect(lambda _prices, w=worker: self._workers.remove(w) if w in self._workers else None)
+        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
         self._workers.append(worker)
         worker.start()
 

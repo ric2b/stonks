@@ -269,8 +269,8 @@ class ChartWidget(QWidget):
         worker = HistoryWorker(ticker, yf_period, yf_interval)
         worker.finished.connect(lambda df, t=ticker: self._on_data_received(df, t))
         worker.error.connect(lambda _err, t=ticker: self._on_data_error(t))
-        worker.finished.connect(lambda _df, w=worker: self._workers.remove(w))
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w))
+        worker.finished.connect(lambda _df, w=worker: self._workers.remove(w) if w in self._workers else None)
+        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
         self._workers.append(worker)
         worker.start()
 

@@ -189,8 +189,8 @@ class NewsWidget(QWidget):
 
         worker = NewsWorker(ticker)
         worker.finished.connect(lambda items, t=ticker: self._on_news_received(items, t))
-        worker.finished.connect(lambda _items, w=worker: self._workers.remove(w))
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w))
+        worker.finished.connect(lambda _items, w=worker: self._workers.remove(w) if w in self._workers else None)
+        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
         self._workers.append(worker)
         worker.start()
 
@@ -281,8 +281,8 @@ class DetailView(QWidget):
 
         worker = InfoWorker(ticker)
         worker.finished.connect(lambda info, t=ticker: self._on_info_received(info, t))
-        worker.finished.connect(lambda _info, w=worker: self._workers.remove(w))
-        worker.error.connect(lambda _err, w=worker: self._workers.remove(w))
+        worker.finished.connect(lambda _info, w=worker: self._workers.remove(w) if w in self._workers else None)
+        worker.error.connect(lambda _err, w=worker: self._workers.remove(w) if w in self._workers else None)
         self._workers.append(worker)
         worker.start()
 

@@ -201,7 +201,7 @@ class MainWindow(QMainWindow):
         if not tickers:
             return
         worker = PrefetchWorker(tickers, yf_period, yf_interval)
-        worker.finished.connect(lambda w=worker: self._workers.remove(w))
+        worker.finished.connect(lambda w=worker: self._workers.remove(w) if w in self._workers else None)
         self._workers.append(worker)
         worker.start()
 
