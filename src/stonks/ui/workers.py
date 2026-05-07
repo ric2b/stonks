@@ -24,6 +24,7 @@ class ValidateWorker(QThread):
 
     def __init__(self, ticker: str):
         super().__init__()
+        self.setObjectName(f'ValidateWorker({ticker})')
         self.ticker = ticker
 
     def run(self):
@@ -40,6 +41,7 @@ class HistoryWorker(QThread):
 
     def __init__(self, ticker: str, period: str, interval: str):
         super().__init__()
+        self.setObjectName(f'HistoryWorker({ticker},{period},{interval})')
         self.ticker = ticker
         self.period = period
         self.interval = interval
@@ -60,6 +62,7 @@ class InfoWorker(QThread):
 
     def __init__(self, ticker: str):
         super().__init__()
+        self.setObjectName(f'InfoWorker({ticker})')
         self.ticker = ticker
 
     def run(self):
@@ -76,6 +79,7 @@ class SearchWorker(QThread):
 
     def __init__(self, query: str):
         super().__init__()
+        self.setObjectName(f'SearchWorker({query})')
         self.query = query
 
     def run(self):
@@ -92,6 +96,7 @@ class PriceUpdateWorker(QThread):
 
     def __init__(self, tickers: list[str]):
         super().__init__()
+        self.setObjectName(f'PriceUpdateWorker({",".join(tickers)})')
         self.tickers = tickers
 
     def run(self):
@@ -117,6 +122,7 @@ class NameFetchWorker(QThread):
 
     def __init__(self, tickers: list[str]):
         super().__init__()
+        self.setObjectName(f'NameFetchWorker({",".join(tickers)})')
         self.tickers = tickers
 
     def run(self):
@@ -134,6 +140,7 @@ class NewsWorker(QThread):
 
     def __init__(self, ticker: str):
         super().__init__()
+        self.setObjectName(f'NewsWorker({ticker})')
         self.ticker = ticker
 
     def run(self):
@@ -150,6 +157,7 @@ class PrefetchWorker(QThread):
 
     def __init__(self, tickers: list[str], period: str, interval: str):
         super().__init__()
+        self.setObjectName(f'PrefetchWorker({",".join(tickers)})')
         self.tickers = tickers
         self.period = period
         self.interval = interval
