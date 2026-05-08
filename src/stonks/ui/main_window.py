@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QSplitter,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -101,6 +102,40 @@ class _StatusBar(QWidget):
         self._msg_timer.start(ms)
 
 
+class _EmptyState(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("rightPane")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addStretch(3)
+
+        icon = QLabel("📈")
+        icon.setObjectName("emptyStateIcon")
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(icon, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        layout.addSpacing(20)
+
+        heading = QLabel("Your watchlist is empty")
+        heading.setObjectName("emptyStateHeading")
+        heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(heading)
+
+        layout.addSpacing(8)
+
+        desc = QLabel(
+            "Add tickers to track prices, view interactive\ncharts and follow market movements."
+        )
+        desc.setObjectName("emptyStateDesc")
+        desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(desc)
+
+        layout.addStretch(4)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, conn: sqlite3.Connection):
         super().__init__()
@@ -118,6 +153,12 @@ class MainWindow(QMainWindow):
 
         self.watchlist = WatchlistWidget(conn)
         splitter.addWidget(self.watchlist)
+
+        self._right_stack = QStackedWidget()
+        self._right_stack.setObjectName("rightPane")
+
+        self._empty_state = _EmptyState()
+        self._right_stack.addWidget(self._empty_state)
 
         right_splitter = QSplitter(Qt.Orientation.Vertical)
         right_splitter.setObjectName("rightPane")
@@ -143,7 +184,9 @@ class MainWindow(QMainWindow):
         right_splitter.setCollapsible(0, False)
         right_splitter.setCollapsible(1, False)
 
-        splitter.addWidget(right_splitter)
+        self._right_stack.addWidget(right_splitter)
+
+        splitter.addWidget(self._right_stack)
         splitter.setSizes([260, 640])
 
         main_layout.addWidget(splitter, stretch=1)
@@ -154,6 +197,7 @@ class MainWindow(QMainWindow):
         self._workers: list[PrefetchWorker] = []
 
         self.watchlist.ticker_selected.connect(self._on_ticker_selected)
+        self.watchlist.watchlist_emptied.connect(self._show_empty_state)
         self.detail_view.info_received.connect(self.chart.set_company_info)
         self.detail_view.info_received.connect(self._on_info_received)
         self.detail_view.price_received.connect(self.watchlist.update_price)
@@ -162,7 +206,7 @@ class MainWindow(QMainWindow):
 
         self._restore_session()
         self._setup_shortcuts()
-        if sys.platform == 'darwin':
+        if sys.platform == "darwin":
             self._setup_menus()
 
         self.watchlist.list_widget.setFocus()
@@ -198,6 +242,9 @@ class MainWindow(QMainWindow):
             f"<p>Desktop stock tracker for Linux and macOS.</p>",
         )
 
+    def _show_empty_state(self):
+        self._right_stack.setCurrentIndex(0)
+
     def _restore_session(self):
         last_period = get_setting(self.conn, "last_period", "1M")
         period_labels = list(TIME_RANGES.keys())
@@ -207,6 +254,9 @@ class MainWindow(QMainWindow):
         last_ticker = get_setting(self.conn, "last_ticker", "")
         if not self.watchlist.select_ticker(last_ticker):
             self.watchlist.select_first()
+
+        if self.watchlist.list_widget.count() == 0:
+            self._right_stack.setCurrentIndex(0)
 
         yf_period, yf_interval = TIME_RANGES[self.chart._current_period]
         self._start_prefetch(yf_period, yf_interval)
@@ -237,6 +287,7 @@ class MainWindow(QMainWindow):
         update_ticker_meta(self.conn, ticker, name, currency)
 
     def _on_ticker_selected(self, ticker: str):
+        self._right_stack.setCurrentIndex(1)
         set_setting(self.conn, "last_ticker", ticker)
         self.chart.update_chart(ticker)
         self.detail_view.update_detail(ticker)

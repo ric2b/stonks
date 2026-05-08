@@ -298,6 +298,31 @@ QLabel#searchResultExchange {
     letter-spacing: 0.3px;
 }
 
+/* ── Empty state ─────────────────────────────────────── */
+QLabel#emptyStateIcon {
+    font-size: 32px;
+    background-color: rgba(255, 255, 255, 13);
+    border-radius: 16px;
+    padding: 12px;
+    max-width: 56px;
+    min-width: 56px;
+    max-height: 56px;
+    min-height: 56px;
+    qproperty-alignment: AlignCenter;
+}
+QLabel#emptyStateHeading {
+    font-size: 18px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 235);
+    background-color: transparent;
+}
+QLabel#emptyStateDesc {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 107);
+    background-color: transparent;
+    line-height: 1.4;
+}
+
 /* ── Scrollbars ──────────────────────────────────────── */
 QScrollBar:vertical {
     background-color: transparent;

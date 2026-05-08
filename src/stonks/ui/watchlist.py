@@ -114,6 +114,7 @@ class _SearchResultWidget(QWidget):
 
 class WatchlistWidget(QWidget):
     ticker_selected = Signal(str)
+    watchlist_emptied = Signal()
 
     def __init__(self, conn: sqlite3.Connection, parent=None):
         super().__init__(parent)
@@ -353,6 +354,8 @@ class WatchlistWidget(QWidget):
             row = self.list_widget.row(item)
             self.list_widget.takeItem(row)
             self._update_count()
+            if self.list_widget.count() == 0:
+                self.watchlist_emptied.emit()
 
     def _on_selection_changed(self, current, previous):
         if current is not None:
@@ -461,3 +464,5 @@ class WatchlistWidget(QWidget):
         remove_ticker(self.conn, ticker)
         self.list_widget.takeItem(self.list_widget.row(item))
         self._update_count()
+        if self.list_widget.count() == 0:
+            self.watchlist_emptied.emit()
