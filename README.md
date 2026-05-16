@@ -2,7 +2,7 @@
 
 <img src="assets/com.stonks.Stonks.svg" width="96" alt="Stonks icon"/>
 
-Desktop stock tracker for Linux and MacOS.
+Desktop stock tracker for Linux and macOS. Built with Go + Wails.
 
 <img width="946" height="881" alt="image" src="https://github.com/user-attachments/assets/34b34e95-6909-479d-82fe-7db325b26225" />
 
@@ -23,44 +23,68 @@ chmod +x stonks-x86_64.AppImage
 ./stonks-x86_64.AppImage
 ```
 
-### Linux (Snap)
-
-Download the `.snap` file and install it locally:
-
-```bash
-sudo snap install --dangerous stonks_*.snap
-```
+Requires `libwebkit2gtk-4.1` on your system.
 
 ## Features
 
-- Watchlist management (add/remove/reorder tickers)
+- Watchlist management (add/remove/reorder via drag-and-drop)
 - Interactive price charts with time range selectors
-- Key financial stats for each stock
+- Drag-to-compare price changes between two points
+- Key financial stats grid
+- News feed with links to articles
+- Market state indicator
+- Keyboard shortcuts (/, 1-9, arrows, Delete)
+- Session restore (remembers last ticker and time range)
 
 ## Development
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+Requires Go 1.23+, Node.js 20+, and [Wails v2](https://wails.io/docs/gettingstarted/installation).
 
 ```bash
-uv sync --all-extras
-uv run stonks
+cd go
+wails dev
+```
+
+### Linux build dependencies
+
+```bash
+sudo apt-get install libgtk-3-dev libwebkit2gtk-4.1-dev
 ```
 
 ## Testing
 
 ```bash
-uv run pytest
-uv run ruff check .
+cd go
+go test ./...
 ```
+
+Frontend type check:
+
+```bash
+cd go/frontend
+npm ci
+npx tsc --noEmit
+```
+
+## Building
+
+```bash
+cd go
+wails build
+```
+
+Output binary is in `go/build/bin/`.
 
 ## Releasing
 
+Push a version tag to trigger the release workflow:
+
 ```bash
-./release.sh X.Y.Z
+git tag v0.6.0
 git push && git push --tags
 ```
 
-The script updates the version in `pyproject.toml`, commits, and creates a `v0.2.0` tag. Pushing the tag triggers the release workflow which builds and uploads macOS (DMG), Linux (AppImage), and Snap packages.
+The workflow builds macOS (universal DMG) and Linux (AppImage) packages and creates a GitHub release.
 
 ## License
 

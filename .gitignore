@@ -1,20 +1,10 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-dist/
-build/
-!go/build/
-go/build/bin/
-
-# Virtual environments
-.venv/
-
 # Go
+go/build/bin/
 go/frontend/node_modules/
 go/frontend/dist/
-go/build/bin/
+
+# Build artifacts
+dist/
 
 # IDE
 .idea/
@@ -32,4 +22,3 @@ Thumbs.db
 # Claude Code
 .claude/*
 !.claude/settings.json
-
