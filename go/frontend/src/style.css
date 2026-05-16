@@ -400,6 +400,41 @@ html, body {
     margin-bottom: 4px;
 }
 
+/* Stats panel */
+.stats-container {
+    padding: 12px 20px 16px;
+    border-top: 1px solid var(--border);
+}
+
+.stats-container.hidden {
+    display: none;
+}
+
+.stats-panel {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px 24px;
+}
+
+.stats-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.stats-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.stats-value {
+    font-size: 13px;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+}
+
 /* Drag compare overlay */
 .drag-overlay {
     position: absolute;

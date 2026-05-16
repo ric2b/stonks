@@ -1,6 +1,7 @@
 import './style.css';
 import { Watchlist } from './watchlist';
 import { ChartView } from './chart';
+import { StatsPanel } from './stats-panel';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { FetchTickerInfo, GetSetting } from '../wailsjs/go/app/App';
 
@@ -15,19 +16,23 @@ app.innerHTML = `
             <div class="empty-state-desc">Search for a stock and add it to your watchlist</div>
         </div>
         <div class="chart-area hidden" id="chart-area"></div>
+        <div class="stats-container hidden" id="stats-container"></div>
     </div>
 `;
 
 const sidebar = document.getElementById('sidebar')!;
 const chartArea = document.getElementById('chart-area')!;
 const emptyState = document.getElementById('empty-state')!;
+const statsContainer = document.getElementById('stats-container')!;
 
 const watchlist = new Watchlist(sidebar);
 const chartView = new ChartView(chartArea);
+const statsPanel = new StatsPanel(statsContainer);
 
 function showChart() {
     emptyState.classList.add('hidden');
     chartArea.classList.remove('hidden');
+    statsContainer.classList.remove('hidden');
 }
 
 async function loadTicker(ticker: string) {
@@ -57,6 +62,7 @@ async function loadTicker(ticker: string) {
         const price = (info['regularMarketPrice'] || 0) as number;
         const changePct = (info['regularMarketChangePercent'] || 0) as number;
         chartView.updateHeader(ticker, name, price, changePct, exchange, currency);
+        statsPanel.update(info, currency);
     }
 }
 
