@@ -3,8 +3,11 @@ package main
 import (
 	"embed"
 	"log"
+	"runtime"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
@@ -17,7 +20,7 @@ var assets embed.FS
 func main() {
 	a := app.New()
 
-	err := wails.Run(&options.App{
+	appOptions := &options.App{
 		Title:     "Stonks",
 		Width:     900,
 		Height:    600,
@@ -32,8 +35,26 @@ func main() {
 		Bind: []interface{}{
 			a,
 		},
-	})
+	}
+
+	if runtime.GOOS == "darwin" {
+		appOptions.Menu = buildMacMenu()
+	}
+
+	err := wails.Run(appOptions)
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func buildMacMenu() *menu.Menu {
+	appMenu := menu.NewMenu()
+
+	appMenu.Append(menu.AppMenu())
+	appMenu.Append(menu.EditMenu())
+
+	viewMenu := appMenu.AddSubmenu("View")
+	viewMenu.AddText("Reload", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {})
+
+	return appMenu
 }
