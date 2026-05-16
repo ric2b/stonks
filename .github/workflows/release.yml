@@ -13,64 +13,56 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8.1.0
-      - name: Install dependencies
-        run: uv sync --no-dev
-      - name: Generate .icns
-        run: |
-          brew install librsvg
-          mkdir Stonks.iconset
-          for size in 16 32 128 256 512; do
-            rsvg-convert -w $size -h $size assets/com.stonks.Stonks.svg > Stonks.iconset/icon_${size}x${size}.png
-            rsvg-convert -w $((size*2)) -h $((size*2)) assets/com.stonks.Stonks.svg > Stonks.iconset/icon_${size}x${size}@2x.png
-          done
-          iconutil -c icns Stonks.iconset -o stonks.icns
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      - name: Build .app
-        run: |
-          uv pip install pyinstaller
-          uv run pyinstaller --windowed --name Stonks --icon stonks.icns \
-            --collect-all pyqtgraph src/stonks/main.py
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Set bundle version
-        run: |
-          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          PLIST=dist/Stonks.app/Contents/Info.plist
-          /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST" 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION" "$PLIST" 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
+      - name: Build macOS app
+        working-directory: go
+        run: wails build -platform darwin/universal
 
       - name: Create DMG
         run: |
-          hdiutil create -volname Stonks -srcfolder dist/Stonks.app \
+          hdiutil create -volname Stonks -srcfolder go/build/bin/Stonks.app \
             -ov -format UDZO dist/stonks-macos.dmg
+        env:
+          CGO_ENABLED: 1
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
           path: dist/stonks-macos.dmg
 
-  appimage:
-    runs-on: ubuntu-24.04
+  linux:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb-cursor0 librsvg2-bin libfuse2t64
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2
 
-      - name: Install Python dependencies
-        run: uv sync --no-dev
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Build with PyInstaller
-        run: |
-          uv pip install pyinstaller
-          uv run pyinstaller --name Stonks --collect-all pyqtgraph src/stonks/main.py
+      - name: Build Linux binary
+        working-directory: go
+        run: wails build -platform linux/amd64
 
       - name: Create AppDir
         run: |
@@ -78,12 +70,15 @@ jobs:
           mkdir -p Stonks.AppDir/usr/share/icons/hicolor/256x256/apps
           mkdir -p Stonks.AppDir/usr/share/applications
 
-          cp -r dist/Stonks/* Stonks.AppDir/usr/bin/
+          cp go/build/bin/stonks Stonks.AppDir/usr/bin/Stonks
 
-          rsvg-convert -w 256 -h 256 assets/com.stonks.Stonks.svg \
-            > Stonks.AppDir/com.stonks.Stonks.png
-          cp Stonks.AppDir/com.stonks.Stonks.png \
-            Stonks.AppDir/usr/share/icons/hicolor/256x256/apps/
+          if [ -f assets/com.stonks.Stonks.svg ]; then
+            sudo apt-get install -y librsvg2-bin
+            rsvg-convert -w 256 -h 256 assets/com.stonks.Stonks.svg \
+              > Stonks.AppDir/com.stonks.Stonks.png
+            cp Stonks.AppDir/com.stonks.Stonks.png \
+              Stonks.AppDir/usr/share/icons/hicolor/256x256/apps/
+          fi
 
           cat > Stonks.AppDir/com.stonks.Stonks.desktop <<'EOF'
           [Desktop Entry]
@@ -110,42 +105,27 @@ jobs:
         run: |
           wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
+          mkdir -p dist
           ARCH=x86_64 ./appimagetool-x86_64.AppImage --no-appstream \
             Stonks.AppDir dist/stonks-x86_64.AppImage
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: linux-appimage
           path: dist/stonks-x86_64.AppImage
 
-  snap:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Build snap
-        uses: snapcore/action-build@v1
-        id: build
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: linux-snap
-          path: ${{ steps.build.outputs.snap }}
-
   release:
-    needs: [macos, appimage, snap]
+    needs: [macos, linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
-
