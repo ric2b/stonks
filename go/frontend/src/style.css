@@ -61,3 +61,227 @@ html, body {
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.25);
 }
+
+/* Layout */
+.sidebar {
+    width: 260px;
+    min-width: 260px;
+    height: 100%;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.main-content {
+    flex: 1;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+}
+
+/* Empty state */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.empty-state-title {
+    font-size: 16px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.empty-state-desc {
+    font-size: 13px;
+}
+
+/* Watchlist search */
+.watchlist-search {
+    padding: 12px 12px 8px;
+    background: var(--bg-sidebar);
+}
+
+.watchlist-search-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.watchlist-search-input:focus {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.watchlist-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Search results */
+.watchlist-search-results {
+    background: var(--bg-input);
+    border-bottom: 1px solid var(--border);
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.watchlist-search-results.hidden {
+    display: none;
+}
+
+.search-result-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    cursor: pointer;
+    outline: none;
+    gap: 8px;
+}
+
+.search-result-item:hover,
+.search-result-item:focus {
+    background: var(--bg-hover);
+}
+
+.search-result-symbol {
+    font-weight: 600;
+    min-width: 60px;
+}
+
+.search-result-name {
+    flex: 1;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-result-exchange {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Watchlist header */
+.watchlist-header {
+    padding: 12px 12px 8px;
+}
+
+.watchlist-header-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}
+
+/* Watchlist items */
+.watchlist-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 4px;
+}
+
+.watchlist-item {
+    padding: 10px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 2px;
+}
+
+.watchlist-item:hover {
+    background: var(--bg-hover);
+}
+
+.watchlist-item.selected {
+    background: var(--bg-selected);
+}
+
+.watchlist-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 3px;
+}
+
+.watchlist-item-ticker {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.watchlist-item-price {
+    font-family: var(--font-mono);
+    font-size: 13px;
+}
+
+.watchlist-item-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.watchlist-item-name {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    margin-right: 8px;
+}
+
+.watchlist-item-change {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+
+.watchlist-item-change.up {
+    color: var(--green);
+    background: rgba(76, 210, 120, 0.12);
+}
+
+.watchlist-item-change.down {
+    color: var(--red);
+    background: rgba(255, 107, 122, 0.12);
+}
+
+/* Context menu */
+.context-menu {
+    position: fixed;
+    background: #2a2a2a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 0;
+    min-width: 180px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+}
+
+.context-menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.context-menu-item:hover {
+    background: var(--bg-hover);
+}
