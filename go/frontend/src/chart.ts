@@ -1,5 +1,6 @@
 import { createChart, IChartApi, ISeriesApi, AreaData, HistogramData, Time, CrosshairMode, AreaSeries, HistogramSeries } from 'lightweight-charts';
 import { FetchChartData, GetTimeRanges, SetSetting, IsIntradayInterval, PrefetchHistory } from '../wailsjs/go/app/App';
+import { DragCompare } from './drag-compare';
 
 interface TimeRangeInfo {
     label: string;
@@ -151,6 +152,8 @@ export class ChartView {
             }
         });
         ro.observe(this.chartContainer);
+
+        new DragCompare(this.chart, this.areaSeries, this.chartContainer, this.hoverLabel);
     }
 
     async loadTicker(ticker: string, period?: string, interval?: string) {

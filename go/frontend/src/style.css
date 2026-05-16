@@ -400,8 +400,21 @@ html, body {
     margin-bottom: 4px;
 }
 
+/* Drag compare overlay */
+.drag-overlay {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(91, 155, 245, 0.1);
+    border-left: 1px solid rgba(91, 155, 245, 0.4);
+    border-right: 1px solid rgba(91, 155, 245, 0.4);
+    pointer-events: none;
+    z-index: 10;
+}
+
 /* Chart container */
 .chart-container {
     flex: 1;
     min-height: 200px;
+    position: relative;
 }
