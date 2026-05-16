@@ -435,6 +435,46 @@ html, body {
     color: var(--text-primary);
 }
 
+/* Status bar */
+.status-bar-container {
+    margin-top: auto;
+}
+
+.status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 20px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.status-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.status-state {
+    color: var(--text-secondary);
+}
+
+.status-time {
+    color: var(--text-muted);
+}
+
+.status-right {
+    color: var(--text-muted);
+}
+
 /* News panel */
 .news-container {
     padding: 12px 20px 16px;

@@ -3,6 +3,7 @@ import { Watchlist } from './watchlist';
 import { ChartView } from './chart';
 import { StatsPanel } from './stats-panel';
 import { NewsPanel } from './news-panel';
+import { StatusBar } from './status-bar';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { FetchTickerInfo, GetSetting } from '../wailsjs/go/app/App';
 
@@ -19,6 +20,7 @@ app.innerHTML = `
         <div class="chart-area hidden" id="chart-area"></div>
         <div class="stats-container hidden" id="stats-container"></div>
         <div class="news-container hidden" id="news-container"></div>
+        <div class="status-bar-container" id="status-bar"></div>
     </div>
 `;
 
@@ -27,11 +29,13 @@ const chartArea = document.getElementById('chart-area')!;
 const emptyState = document.getElementById('empty-state')!;
 const statsContainer = document.getElementById('stats-container')!;
 const newsContainer = document.getElementById('news-container')!;
+const statusBarEl = document.getElementById('status-bar')!;
 
 const watchlist = new Watchlist(sidebar);
 const chartView = new ChartView(chartArea);
 const statsPanel = new StatsPanel(statsContainer);
 const newsPanel = new NewsPanel(newsContainer);
+const statusBar = new StatusBar(statusBarEl);
 
 function showChart() {
     emptyState.classList.add('hidden');
@@ -68,6 +72,7 @@ async function loadTicker(ticker: string) {
         const changePct = (info['regularMarketChangePercent'] || 0) as number;
         chartView.updateHeader(ticker, name, price, changePct, exchange, currency);
         statsPanel.update(info, currency);
+        statusBar.updateMarketState((info['marketState'] || 'CLOSED') as string);
     }
 
     newsPanel.loadNews(ticker);
