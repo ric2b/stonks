@@ -5,7 +5,7 @@ import { StatsPanel } from './stats-panel';
 import { NewsPanel } from './news-panel';
 import { StatusBar } from './status-bar';
 import { EventsOn } from '../wailsjs/runtime/runtime';
-import { FetchTickerInfo, GetSetting } from '../wailsjs/go/app/App';
+import { FetchTickerInfo, GetSetting, SetSetting, PrefetchHistory } from '../wailsjs/go/app/App';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -79,6 +79,7 @@ async function loadTicker(ticker: string) {
 }
 
 watchlist.onTickerSelected = (ticker: string) => {
+    SetSetting('last_ticker', ticker);
     loadTicker(ticker);
 };
 
@@ -135,5 +136,18 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     }
 });
 
-chartView.init();
-watchlist.init();
+chartView.onRangeChanged = (period: string, interval: string) => {
+    PrefetchHistory(period, interval);
+};
+
+async function restoreSession() {
+    await chartView.init();
+    await watchlist.init();
+
+    const lastTicker = await GetSetting('last_ticker');
+    if (lastTicker && watchlist.getTickers().includes(lastTicker)) {
+        watchlist.selectTickerByName(lastTicker);
+    }
+}
+
+restoreSession();

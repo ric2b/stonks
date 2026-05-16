@@ -326,6 +326,10 @@ export class Watchlist {
         }
     }
 
+    selectTickerByName(ticker: string) {
+        this.selectTicker(ticker);
+    }
+
     getSelectedTicker(): string {
         return this.selectedTicker;
     }
