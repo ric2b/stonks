@@ -2,6 +2,7 @@ import './style.css';
 import { Watchlist } from './watchlist';
 import { ChartView } from './chart';
 import { StatsPanel } from './stats-panel';
+import { NewsPanel } from './news-panel';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { FetchTickerInfo, GetSetting } from '../wailsjs/go/app/App';
 
@@ -17,6 +18,7 @@ app.innerHTML = `
         </div>
         <div class="chart-area hidden" id="chart-area"></div>
         <div class="stats-container hidden" id="stats-container"></div>
+        <div class="news-container hidden" id="news-container"></div>
     </div>
 `;
 
@@ -24,15 +26,18 @@ const sidebar = document.getElementById('sidebar')!;
 const chartArea = document.getElementById('chart-area')!;
 const emptyState = document.getElementById('empty-state')!;
 const statsContainer = document.getElementById('stats-container')!;
+const newsContainer = document.getElementById('news-container')!;
 
 const watchlist = new Watchlist(sidebar);
 const chartView = new ChartView(chartArea);
 const statsPanel = new StatsPanel(statsContainer);
+const newsPanel = new NewsPanel(newsContainer);
 
 function showChart() {
     emptyState.classList.add('hidden');
     chartArea.classList.remove('hidden');
     statsContainer.classList.remove('hidden');
+    newsContainer.classList.remove('hidden');
 }
 
 async function loadTicker(ticker: string) {
@@ -64,6 +69,8 @@ async function loadTicker(ticker: string) {
         chartView.updateHeader(ticker, name, price, changePct, exchange, currency);
         statsPanel.update(info, currency);
     }
+
+    newsPanel.loadNews(ticker);
 }
 
 watchlist.onTickerSelected = (ticker: string) => {
