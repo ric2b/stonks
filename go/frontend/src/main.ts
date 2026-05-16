@@ -1,25 +1,67 @@
 import './style.css';
 import { Watchlist } from './watchlist';
+import { ChartView } from './chart';
 import { EventsOn } from '../wailsjs/runtime/runtime';
+import { FetchTickerInfo, GetSetting } from '../wailsjs/go/app/App';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 app.innerHTML = `
     <div class="sidebar" id="sidebar"></div>
     <div class="main-content" id="main-content">
-        <div class="empty-state">
+        <div class="empty-state" id="empty-state">
             <div class="empty-state-icon">📈</div>
             <div class="empty-state-title">No ticker selected</div>
             <div class="empty-state-desc">Search for a stock and add it to your watchlist</div>
         </div>
+        <div class="chart-area hidden" id="chart-area"></div>
     </div>
 `;
 
 const sidebar = document.getElementById('sidebar')!;
-const watchlist = new Watchlist(sidebar);
+const chartArea = document.getElementById('chart-area')!;
+const emptyState = document.getElementById('empty-state')!;
 
-watchlist.onTickerSelected = (_ticker: string) => {
-    // Chart, detail, and news views will be wired up in later commits
+const watchlist = new Watchlist(sidebar);
+const chartView = new ChartView(chartArea);
+
+function showChart() {
+    emptyState.classList.add('hidden');
+    chartArea.classList.remove('hidden');
+}
+
+async function loadTicker(ticker: string) {
+    showChart();
+
+    const lastPeriod = await GetSetting('last_period');
+    const range = chartView.getCurrentRange();
+    let period = range?.period;
+    let interval = range?.interval;
+
+    if (lastPeriod && !range) {
+        const ranges = await (await import('../wailsjs/go/app/App')).GetTimeRanges();
+        const found = ranges.find((r: any) => r.label === lastPeriod);
+        if (found) {
+            period = found.period;
+            interval = found.interval;
+        }
+    }
+
+    await chartView.loadTicker(ticker, period, interval);
+
+    const info = await FetchTickerInfo(ticker);
+    if (info) {
+        const name = (info['longName'] || info['shortName'] || '') as string;
+        const exchange = (info['exchangeName'] || info['exchange'] || '') as string;
+        const currency = (info['currency'] || '') as string;
+        const price = (info['regularMarketPrice'] || 0) as number;
+        const changePct = (info['regularMarketChangePercent'] || 0) as number;
+        chartView.updateHeader(ticker, name, price, changePct, exchange, currency);
+    }
+}
+
+watchlist.onTickerSelected = (ticker: string) => {
+    loadTicker(ticker);
 };
 
 EventsOn('prices:updated', (updates: Array<{ticker: string, price: number, changePct: number}>) => {
@@ -34,4 +76,5 @@ EventsOn('names:updated', (updates: Array<{ticker: string, name: string}>) => {
     }
 });
 
+chartView.init();
 watchlist.init();

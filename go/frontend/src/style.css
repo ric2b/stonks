@@ -285,3 +285,123 @@ html, body {
 .context-menu-item:hover {
     background: var(--bg-hover);
 }
+
+/* Chart area */
+.chart-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 16px 20px 0;
+}
+
+.chart-area.hidden {
+    display: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Chart header */
+.chart-header {
+    margin-bottom: 12px;
+}
+
+.chart-header-top {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.chart-ticker {
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.chart-company {
+    font-size: 13px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chart-header-price {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.chart-price-value {
+    font-size: 20px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+}
+
+.chart-price-change {
+    font-size: 14px;
+    font-family: var(--font-mono);
+}
+
+.chart-price-change.up {
+    color: var(--green);
+}
+
+.chart-price-change.down {
+    color: var(--red);
+}
+
+.chart-header-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Range bar */
+.chart-range-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.range-btn {
+    padding: 4px 10px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.range-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.range-btn.active {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* Hover label */
+.chart-hover-label {
+    height: 18px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    margin-bottom: 4px;
+}
+
+/* Chart container */
+.chart-container {
+    flex: 1;
+    min-height: 200px;
+}

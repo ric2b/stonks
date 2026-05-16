@@ -3,9 +3,27 @@
 
 export function AddTicker(arg1:string):Promise<void>;
 
+export function FetchChartData(arg1:string,arg2:string,arg3:string):Promise<{timestamps:number[],open:(number|null)[],high:(number|null)[],low:(number|null)[],close:(number|null)[],volume:(number|null)[],meta:Record<string,any>}|null>;
+
+export function FetchNewsItems(arg1:string):Promise<Array<{title:string,url:string,provider:string,pubDate:number}>>;
+
+export function FetchPricesNow():Promise<Array<{ticker:string,price:number,changePct:number}>>;
+
+export function FetchTickerInfo(arg1:string):Promise<Record<string,any>|null>;
+
+export function GetChartDataCached(arg1:string,arg2:string,arg3:string):Promise<{timestamps:number[],open:(number|null)[],high:(number|null)[],low:(number|null)[],close:(number|null)[],volume:(number|null)[],meta:Record<string,any>}|null>;
+
+export function GetPriceData(arg1:string):Promise<{price:number,changePct:number}|null>;
+
 export function GetSetting(arg1:string):Promise<string>;
 
+export function GetTimeRanges():Promise<Array<{label:string,period:string,interval:string}>>;
+
 export function GetWatchlist():Promise<Array<{ticker:string,position:number,name:string,currency:string}>>;
+
+export function IsIntradayInterval(arg1:string):Promise<boolean>;
+
+export function PrefetchHistory(arg1:string,arg2:string):Promise<void>;
 
 export function RemoveTicker(arg1:string):Promise<void>;
 

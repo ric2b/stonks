@@ -6,12 +6,48 @@ export function AddTicker(arg1) {
   return window['go']['app']['App']['AddTicker'](arg1);
 }
 
+export function FetchChartData(arg1, arg2, arg3) {
+  return window['go']['app']['App']['FetchChartData'](arg1, arg2, arg3);
+}
+
+export function FetchNewsItems(arg1) {
+  return window['go']['app']['App']['FetchNewsItems'](arg1);
+}
+
+export function FetchPricesNow() {
+  return window['go']['app']['App']['FetchPricesNow']();
+}
+
+export function FetchTickerInfo(arg1) {
+  return window['go']['app']['App']['FetchTickerInfo'](arg1);
+}
+
+export function GetChartDataCached(arg1, arg2, arg3) {
+  return window['go']['app']['App']['GetChartDataCached'](arg1, arg2, arg3);
+}
+
+export function GetPriceData(arg1) {
+  return window['go']['app']['App']['GetPriceData'](arg1);
+}
+
 export function GetSetting(arg1) {
   return window['go']['app']['App']['GetSetting'](arg1);
 }
 
+export function GetTimeRanges() {
+  return window['go']['app']['App']['GetTimeRanges']();
+}
+
 export function GetWatchlist() {
   return window['go']['app']['App']['GetWatchlist']();
+}
+
+export function IsIntradayInterval(arg1) {
+  return window['go']['app']['App']['IsIntradayInterval'](arg1);
+}
+
+export function PrefetchHistory(arg1, arg2) {
+  return window['go']['app']['App']['PrefetchHistory'](arg1, arg2);
 }
 
 export function RemoveTicker(arg1) {
