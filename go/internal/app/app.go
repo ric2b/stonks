@@ -31,6 +31,9 @@ func (a *App) Startup(ctx context.Context) {
 
 	client := yahoo.NewClient()
 	a.service = stockdata.NewService(client)
+
+	a.startNameFetch()
+	a.startPriceRefresh()
 }
 
 func (a *App) Shutdown(_ context.Context) {
