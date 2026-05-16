@@ -214,6 +214,14 @@ html, body {
     background: var(--bg-selected);
 }
 
+.watchlist-item.dragging {
+    opacity: 0.4;
+}
+
+.watchlist-item.drag-over {
+    border-top: 2px solid var(--blue);
+}
+
 .watchlist-item-top {
     display: flex;
     align-items: center;

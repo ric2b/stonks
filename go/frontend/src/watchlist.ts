@@ -1,4 +1,4 @@
-import { GetWatchlist, AddTicker, RemoveTicker, SearchTickers, ValidateTicker } from '../wailsjs/go/app/App';
+import { GetWatchlist, AddTicker, RemoveTicker, ReorderWatchlist, SearchTickers, ValidateTicker } from '../wailsjs/go/app/App';
 
 interface WatchlistEntry {
     ticker: string;
@@ -77,6 +77,7 @@ export class Watchlist {
         const item = document.createElement('div');
         item.className = 'watchlist-item' + (entry.ticker === this.selectedTicker ? ' selected' : '');
         item.dataset.ticker = entry.ticker;
+        item.draggable = true;
 
         item.innerHTML = `
             <div class="watchlist-item-top">
@@ -91,6 +92,30 @@ export class Watchlist {
 
         item.addEventListener('click', () => this.selectTicker(entry.ticker));
         item.addEventListener('contextmenu', (e) => this.showContextMenu(e, entry.ticker));
+
+        item.addEventListener('dragstart', (e) => {
+            e.dataTransfer!.setData('text/plain', entry.ticker);
+            item.classList.add('dragging');
+        });
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            this.listContainer.querySelectorAll('.watchlist-item').forEach(el => el.classList.remove('drag-over'));
+        });
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            item.classList.add('drag-over');
+        });
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('drag-over');
+        });
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            item.classList.remove('drag-over');
+            const draggedTicker = e.dataTransfer!.getData('text/plain');
+            if (draggedTicker && draggedTicker !== entry.ticker) {
+                this.reorder(draggedTicker, entry.ticker);
+            }
+        });
 
         return item;
     }
@@ -276,6 +301,29 @@ export class Watchlist {
         if (!item) return;
         const nameEl = item.querySelector('.watchlist-item-name')!;
         nameEl.textContent = name;
+    }
+
+    private async reorder(draggedTicker: string, targetTicker: string) {
+        const fromIdx = this.entries.findIndex(e => e.ticker === draggedTicker);
+        const toIdx = this.entries.findIndex(e => e.ticker === targetTicker);
+        if (fromIdx === -1 || toIdx === -1) return;
+
+        const [moved] = this.entries.splice(fromIdx, 1);
+        this.entries.splice(toIdx, 0, moved);
+        this.renderList();
+
+        const order = this.entries.map(e => e.ticker);
+        await ReorderWatchlist(order);
+    }
+
+    focusSearch() {
+        this.searchInput.focus();
+    }
+
+    removeSelected() {
+        if (this.selectedTicker) {
+            this.removeTicker(this.selectedTicker);
+        }
     }
 
     getSelectedTicker(): string {

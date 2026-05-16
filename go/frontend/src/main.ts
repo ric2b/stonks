@@ -94,5 +94,46 @@ EventsOn('names:updated', (updates: Array<{ticker: string, name: string}>) => {
     }
 });
 
+document.addEventListener('keydown', (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+
+    if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        watchlist.focusSearch();
+        return;
+    }
+    if (e.key === '/' && !isInput) {
+        e.preventDefault();
+        watchlist.focusSearch();
+        return;
+    }
+    if (e.key === 'Delete' && !isInput) {
+        watchlist.removeSelected();
+        return;
+    }
+    if (e.key === 'Backspace' && !isInput) {
+        watchlist.removeSelected();
+        return;
+    }
+
+    if (!isInput && e.key >= '1' && e.key <= '9') {
+        chartView.selectRangeByIndex(parseInt(e.key) - 1);
+        return;
+    }
+    if (!isInput && e.key === '0') {
+        chartView.selectRangeByIndex(9);
+        return;
+    }
+    if (!isInput && e.key === 'ArrowLeft') {
+        chartView.stepRange(-1);
+        return;
+    }
+    if (!isInput && e.key === 'ArrowRight') {
+        chartView.stepRange(1);
+        return;
+    }
+});
+
 chartView.init();
 watchlist.init();
