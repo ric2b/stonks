@@ -42,8 +42,16 @@ def shutdown_workers(workers: list[QThread]) -> None:
 
 
 def wait_for_closing_workers(timeout_ms: int = 2000) -> None:
+    # A QThread destroyed while still running makes Qt abort the process during
+    # interpreter finalize. quit()/requestInterruption() can't unblock a thread
+    # stuck in a blocking socket read, so terminate any straggler that ignores
+    # the graceful wait before it reaches the destructor.
     for w in _closing_workers:
-        w.wait(timeout_ms)
+        if not w.wait(timeout_ms):
+            logger.warning("Worker %s did not stop; terminating", w.objectName())
+            w.terminate()
+            w.wait()
+    _closing_workers.clear()
 
 
 class ValidateWorker(QThread):
