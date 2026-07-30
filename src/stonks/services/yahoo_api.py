@@ -14,6 +14,10 @@ _SUMMARY_URL = "https://query2.finance.yahoo.com/v10/finance/quoteSummary"
 _SEARCH_URL = "https://query2.finance.yahoo.com/v1/finance/search"
 _NEWS_URL = "https://finance.yahoo.com/xhr/ncp"
 
+# Network requests run on worker threads. Without a timeout a stalled socket
+# read blocks forever, keeping the QThread alive and aborting Qt on shutdown.
+_TIMEOUT = 15
+
 _lock = threading.Lock()
 _opener: urllib.request.OpenerDirector | None = None
 _crumb: str | None = None
@@ -24,10 +28,14 @@ def _fetch_fresh_session() -> tuple[urllib.request.OpenerDirector, str]:
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
     opener.addheaders = [("User-Agent", "Mozilla/5.0")]
     try:
-        opener.open("https://fc.yahoo.com")
+        opener.open("https://fc.yahoo.com", timeout=_TIMEOUT)
     except urllib.error.HTTPError:
         pass
-    crumb = opener.open("https://query1.finance.yahoo.com/v1/test/getcrumb").read().decode()
+    crumb = (
+        opener.open("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=_TIMEOUT)
+        .read()
+        .decode()
+    )
     return opener, crumb
 
 
@@ -58,7 +66,7 @@ def _get(url: str, params: dict | None = None) -> dict:
     params["crumb"] = crumb
     full_url = f"{url}?{urllib.parse.urlencode(params)}"
     try:
-        return json.loads(opener.open(full_url).read())
+        return json.loads(opener.open(full_url, timeout=_TIMEOUT).read())
     except urllib.error.HTTPError as e:
         if e.code == 401:
             _reset_session()
@@ -68,7 +76,7 @@ def _get(url: str, params: dict | None = None) -> dict:
                 _crumb = crumb
             params["crumb"] = crumb
             full_url = f"{url}?{urllib.parse.urlencode(params)}"
-            return json.loads(opener.open(full_url).read())
+            return json.loads(opener.open(full_url, timeout=_TIMEOUT).read())
         raise
 
 
@@ -83,7 +91,7 @@ def _post(url: str, params: dict, body: dict) -> dict:
         method="POST",
     )
     try:
-        return json.loads(opener.open(req).read())
+        return json.loads(opener.open(req, timeout=_TIMEOUT).read())
     except urllib.error.HTTPError as e:
         if e.code == 401:
             _reset_session()
@@ -99,7 +107,7 @@ def _post(url: str, params: dict, body: dict) -> dict:
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            return json.loads(opener.open(req).read())
+            return json.loads(opener.open(req, timeout=_TIMEOUT).read())
         raise
 
 
