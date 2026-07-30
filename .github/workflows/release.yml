@@ -42,6 +42,9 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION" "$PLIST" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
 
+      - name: Ad-hoc code sign
+        run: codesign --force --deep --sign - dist/Stonks.app
+
       - name: Create DMG
         run: |
           hdiutil create -volname Stonks -srcfolder dist/Stonks.app \
