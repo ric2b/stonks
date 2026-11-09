@@ -5,9 +5,8 @@ from PySide6.QtCore import QThread, Signal
 
 from stonks.services.stock_data import (
     batch_fetch_history,
-    fetch_currencies,
     fetch_info,
-    fetch_names,
+    fetch_names_and_currencies,
     fetch_news,
     fetch_prices,
     populate_history_cache,
@@ -163,8 +162,7 @@ class NameFetchWorker(QThread):
 
     def run(self):
         try:
-            names = fetch_names(self.tickers)
-            currencies = fetch_currencies(self.tickers)
+            names, currencies = fetch_names_and_currencies(self.tickers)
             self.finished.emit(names, currencies)
         except Exception as e:
             logger.debug("Name fetch failed: %s", e)

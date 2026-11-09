@@ -6,10 +6,10 @@ from stonks.services.stock_data import (
     HistoryData,
     batch_fetch_history,
     currency_format,
-    fetch_currencies,
     fetch_history,
     fetch_info,
-    fetch_names,
+    fetch_names_and_currencies,
+    fetch_prices,
     populate_history_cache,
     search_tickers,
     validate_ticker,
@@ -287,44 +287,45 @@ def test_search_tickers_respects_max_results(mock_search):
     assert len(results) == 3
 
 
-# ── fetch_names ─────────────────────────────────────────────────────────────
+# ── fetch_names_and_currencies ──────────────────────────────────────────────
 
 
 @patch("stonks.services.stock_data.yahoo_api.batch_quote")
-def test_fetch_names_returns_names(mock_quote):
-    mock_quote.return_value = {"AAPL": {"longName": "Apple Inc."}}
-    names = fetch_names(["AAPL"])
-    assert names == {"AAPL": "Apple Inc."}
+def test_fetch_names_and_currencies_returns_both(mock_quote):
+    mock_quote.return_value = {"AAPL": {"longName": "Apple Inc.", "currency": "USD"}}
+    assert fetch_names_and_currencies(["AAPL"]) == ({"AAPL": "Apple Inc."}, {"AAPL": "USD"})
 
 
 @patch("stonks.services.stock_data.yahoo_api.batch_quote")
-def test_fetch_names_uses_shortname_fallback(mock_quote):
+def test_fetch_names_and_currencies_uses_shortname_fallback(mock_quote):
     mock_quote.return_value = {"AAPL": {"shortName": "Apple"}}
-    names = fetch_names(["AAPL"])
-    assert names == {"AAPL": "Apple"}
+    assert fetch_names_and_currencies(["AAPL"]) == ({"AAPL": "Apple"}, {})
 
 
 @patch("stonks.services.stock_data.yahoo_api.batch_quote")
-def test_fetch_names_skips_tickers_with_no_name(mock_quote):
+def test_fetch_names_and_currencies_skips_unknown_tickers(mock_quote):
     mock_quote.return_value = {"AAPL": {}}
-    names = fetch_names(["AAPL"])
-    assert names == {}
+    assert fetch_names_and_currencies(["AAPL", "NOPE"]) == ({}, {})
 
 
-# ── fetch_currencies ────────────────────────────────────────────────────────
+@patch("stonks.services.stock_data.yahoo_api.batch_quote")
+def test_fetch_names_and_currencies_caches_per_ticker(mock_quote):
+    mock_quote.return_value = {"AAPL": {"longName": "Apple Inc.", "currency": "USD"}}
+    fetch_names_and_currencies(["AAPL"])
+    fetch_names_and_currencies(["AAPL"])
+    mock_quote.assert_called_once()
 
 
-def test_fetch_currencies_returns_cached_currencies():
-    from stonks.services import stock_data
-
-    stock_data._info_cache.set("AAPL", {"currency": "USD"})
-    result = fetch_currencies(["AAPL"])
-    assert result == {"AAPL": "USD"}
+# ── fetch_prices ────────────────────────────────────────────────────────────
 
 
-def test_fetch_currencies_skips_uncached_tickers():
-    result = fetch_currencies(["AAPL"])
-    assert result == {}
+@patch("stonks.services.stock_data.yahoo_api.fetch_quote_summary")
+@patch("stonks.services.stock_data.yahoo_api.batch_quote")
+def test_price_refresh_does_not_replace_detail_info_with_quote_only_data(mock_quote, mock_summary):
+    mock_quote.return_value = {"AAPL": {"regularMarketPrice": 150.0}}
+    mock_summary.return_value = {"beta": 1.2}
+    fetch_prices(["AAPL"])
+    assert fetch_info("AAPL")["beta"] == 1.2
 
 
 # ── TTLCache ────────────────────────────────────────────────────────────────
