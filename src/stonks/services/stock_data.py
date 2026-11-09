@@ -107,7 +107,7 @@ class TTLCache[K, V]:
 
 _info_cache: TTLCache[str, dict] = TTLCache(ttl=300.0)
 _history_cache: TTLCache[tuple[str, str, str], HistoryData] = TTLCache(ttl=60.0)
-_name_cache: TTLCache[str, str] = TTLCache(ttl=None)
+_meta_cache: TTLCache[str, tuple[str, str]] = TTLCache(ttl=None)
 _news_cache: TTLCache[str, list[dict]] = TTLCache(ttl=300.0)
 
 
@@ -184,15 +184,21 @@ def is_history_cached(ticker: str, period: str, interval: str) -> bool:
     return _history_cache.get((ticker, period, interval)) is not None
 
 
-def fetch_names(tickers: list[str]) -> dict[str, str]:
-    uncached = [t for t in tickers if _name_cache.get(t) is None]
+def fetch_names_and_currencies(tickers: list[str]) -> tuple[dict[str, str], dict[str, str]]:
+    """Return ({ticker: name}, {ticker: currency_code}) for tickers Yahoo knows."""
+    uncached = [t for t in tickers if _meta_cache.get(t) is None]
     if uncached:
-        quotes = yahoo_api.batch_quote(uncached)
-        for sym, info in quotes.items():
+        for sym, info in yahoo_api.batch_quote(uncached).items():
             name = info.get("longName") or info.get("shortName") or ""
-            if name:
-                _name_cache.set(sym, name)
-    return {t: name for t in tickers if (name := _name_cache.get(t)) is not None}
+            _meta_cache.set(sym, (name, info.get("currency") or ""))
+    names, currencies = {}, {}
+    for t in tickers:
+        name, currency = _meta_cache.get(t) or ("", "")
+        if name:
+            names[t] = name
+        if currency:
+            currencies[t] = currency
+    return names, currencies
 
 
 def fetch_prices(tickers: list[str]) -> tuple[dict[str, tuple[float, float]], set[str]]:
@@ -218,19 +224,7 @@ def fetch_prices(tickers: list[str]) -> tuple[dict[str, tuple[float, float]], se
             if prev and prev != 0:
                 change_pct = ((price - prev) / prev) * 100
         results[ticker] = (price, change_pct if change_pct is not None else 0.0)
-        _info_cache.set(ticker, info)
     return results, no_data
-
-
-def fetch_currencies(tickers: list[str]) -> dict[str, str]:
-    results = {}
-    for ticker in tickers:
-        cached = _info_cache.get(ticker)
-        if cached is not None:
-            code = cached.get("currency") or ""
-            if code:
-                results[ticker] = code
-    return results
 
 
 def search_tickers(query: str, max_results: int = 5) -> list[dict]:
