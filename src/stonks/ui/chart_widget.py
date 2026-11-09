@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from stonks.config import INTRADAY_INTERVALS, TIME_RANGES
 from stonks.models.database import set_setting
-from stonks.services.stock_data import currency_format
+from stonks.services.stock_data import HistoryData, currency_format
 from stonks.ui.workers import HistoryWorker, shutdown_workers, track_worker
 
 _DASH = Qt.PenStyle.DashLine
@@ -267,7 +267,7 @@ class ChartWidget(QWidget):
         else:
             self._refresh_timer.stop()
         worker = HistoryWorker(ticker, yf_period, yf_interval)
-        worker.finished.connect(lambda df, t=ticker: self._on_data_received(df, t))
+        worker.finished.connect(lambda history, t=ticker: self._on_data_received(history, t))
         worker.error.connect(lambda _err, t=ticker: self._on_data_error(t))
         track_worker(self._workers, worker)
         worker.start()
@@ -366,7 +366,7 @@ class ChartWidget(QWidget):
             f"({sign}{abs_pct:.2f}%)</span>"
         )
 
-    def _on_data_received(self, df, ticker: str):
+    def _on_data_received(self, history: HistoryData, ticker: str):
         if ticker != self._current_ticker:
             return
 
@@ -382,16 +382,13 @@ class ChartWidget(QWidget):
         if self._drag_active:
             self._end_drag()
 
-        if df.empty:
+        if history.empty:
             self._show_status("No data available")
             return
 
-        timestamps = np.array([ts.timestamp() for ts in df.index])
-        prices = np.asarray(df["Close"], dtype=float)
-
-        mask = ~np.isnan(prices)
-        timestamps = timestamps[mask]
-        prices = prices[mask]
+        mask = ~np.isnan(history.close)
+        timestamps = history.timestamps[mask]
+        prices = history.close[mask]
 
         if len(prices) == 0:
             self._show_status("No data available")
@@ -428,26 +425,21 @@ class ChartWidget(QWidget):
         self._update_price_display()
 
         # Volume bars
-        if "Volume" in df.columns:
-            volumes = np.asarray(df["Volume"], dtype=float)
-            volumes = volumes[mask]
-            has_vol = np.any(volumes > 0)
-            if has_vol:
-                self.vol_widget.clear()
-                vol_color = (*color, 90)
-                bar_width = (timestamps[-1] - timestamps[0]) / max(len(timestamps) * 1.2, 1)
-                bars = pg.BarGraphItem(
-                    x=timestamps,
-                    height=volumes,
-                    width=bar_width,
-                    brush=pg.mkBrush(vol_color),
-                    pen=pg.mkPen(None),
-                )
-                self.vol_widget.addItem(bars)
-                self.vol_widget.setXLink(self.price_widget)
-                self.vol_widget.setVisible(True)
-            else:
-                self.vol_widget.setVisible(False)
+        volumes = history.volume[mask]
+        if np.any(volumes > 0):
+            self.vol_widget.clear()
+            vol_color = (*color, 90)
+            bar_width = (timestamps[-1] - timestamps[0]) / max(len(timestamps) * 1.2, 1)
+            bars = pg.BarGraphItem(
+                x=timestamps,
+                height=volumes,
+                width=bar_width,
+                brush=pg.mkBrush(vol_color),
+                pen=pg.mkPen(None),
+            )
+            self.vol_widget.addItem(bars)
+            self.vol_widget.setXLink(self.price_widget)
+            self.vol_widget.setVisible(True)
         else:
             self.vol_widget.setVisible(False)
 

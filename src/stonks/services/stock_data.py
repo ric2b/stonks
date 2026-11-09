@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -53,24 +53,15 @@ def currency_format(code: str) -> tuple[str, str]:
     return (symbol, "")
 
 
+@dataclass(frozen=True)
 class HistoryData:
-    """Lightweight replacement for pandas DataFrame used by the chart widget."""
-
-    def __init__(self, timestamps: list[int | float], ohlcv: dict[str, list]):
-        self._timestamps = timestamps
-        self._ohlcv = ohlcv
-        self.index = [datetime.fromtimestamp(ts, tz=timezone.utc) for ts in timestamps]
+    timestamps: np.ndarray
+    close: np.ndarray
+    volume: np.ndarray
 
     @property
     def empty(self) -> bool:
-        return len(self._timestamps) == 0
-
-    @property
-    def columns(self) -> list[str]:
-        return list(self._ohlcv.keys())
-
-    def __getitem__(self, key: str) -> np.ndarray:
-        return np.array(self._ohlcv[key], dtype=float)
+        return len(self.timestamps) == 0
 
 
 class TTLCache[K, V]:
@@ -128,14 +119,9 @@ def fetch_history(ticker: str, period: str, interval: str) -> HistoryData:
 
 def _chart_to_history(raw: dict) -> HistoryData:
     return HistoryData(
-        raw["timestamps"],
-        {
-            "Close": raw["close"],
-            "Open": raw["open"],
-            "High": raw["high"],
-            "Low": raw["low"],
-            "Volume": raw["volume"],
-        },
+        timestamps=np.asarray(raw["timestamps"], dtype=float),
+        close=np.asarray(raw["close"], dtype=float),
+        volume=np.asarray(raw["volume"], dtype=float),
     )
 
 
