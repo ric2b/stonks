@@ -4,6 +4,7 @@ from unittest.mock import patch
 import pytest
 from PySide6.QtCore import Qt
 
+from stonks.config import TIME_RANGES
 from stonks.models.database import add_ticker
 from stonks.services import yahoo_api
 from stonks.ui.main_window import MainWindow
@@ -198,3 +199,30 @@ def test_uncached_ticker_shows_loading_spinner(qtbot, db, yahoo):
         release.set()
         qtbot.waitUntil(lambda: not chart._status_label.isVisible(), timeout=3000)
         assert not chart._spinner_timer.isActive()
+
+
+def test_switching_to_longer_cached_range_shows_the_whole_range(qtbot, db, yahoo):
+    import numpy as np
+
+    from stonks.services.stock_data import HistoryData, populate_history_cache
+
+    day = 86400.0
+    one_month = HistoryData(np.arange(30) * day, np.linspace(100, 110, 30), np.ones(30))
+    three_months = HistoryData(np.arange(90) * day, np.linspace(90, 110, 90), np.ones(90))
+    populate_history_cache({"AAPL": one_month}, "1mo", "30m")
+    populate_history_cache({"AAPL": three_months}, "3mo", "1h")
+    add_ticker(db, "AAPL")
+    window = MainWindow(db)
+    qtbot.addWidget(window)
+    chart = window.chart
+    chart.set_range_by_index(list(TIME_RANGES).index("1M"))
+
+    chart.set_range_by_index(list(TIME_RANGES).index("3M"))
+
+    x_min, x_max = chart.price_widget.viewRange()[0]
+    assert x_min <= 0 and x_max >= 89 * day
+
+    chart.set_range_by_index(list(TIME_RANGES).index("1M"))
+
+    x_min, x_max = chart.price_widget.viewRange()[0]
+    assert x_min >= -day and x_max <= 30 * day
