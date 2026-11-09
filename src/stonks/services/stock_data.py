@@ -52,7 +52,7 @@ def currency_format(code: str) -> tuple[str, str]:
     return (symbol, "")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class HistoryData:
     timestamps: np.ndarray
     close: np.ndarray
@@ -165,16 +165,16 @@ def fetch_info(ticker: str) -> dict:
     return summary
 
 
-def _fetch_one_history(ticker: str, period: str, interval: str) -> tuple[str, HistoryData | None]:
+def _fetch_one_history(ticker: str, period: str, interval: str) -> HistoryData | None:
     try:
         raw = yahoo_api.fetch_chart(ticker, range_=period, interval=interval)
         if raw is not None:
             hd = _chart_to_history(raw)
             if not hd.empty:
-                return ticker, hd
+                return hd
     except Exception:
         logger.debug("Failed to fetch history for %s", ticker)
-    return ticker, None
+    return None
 
 
 def batch_fetch_history(tickers: list[str], period: str, interval: str) -> dict[str, HistoryData]:
@@ -186,7 +186,7 @@ def batch_fetch_history(tickers: list[str], period: str, interval: str) -> dict[
 
     def fetch(ticker: str) -> None:
         with limit:
-            _, hd = _fetch_one_history(ticker, period, interval)
+            hd = _fetch_one_history(ticker, period, interval)
         if hd is not None:
             with lock:
                 results[ticker] = hd
