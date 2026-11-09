@@ -39,76 +39,37 @@ def _fetch_fresh_session() -> tuple[urllib.request.OpenerDirector, str]:
     return opener, crumb
 
 
-def _ensure_session() -> tuple[urllib.request.OpenerDirector, str]:
+def _session(stale_crumb: str | None = None) -> tuple[urllib.request.OpenerDirector, str]:
     global _opener, _crumb
-    if _opener is not None and _crumb is not None:
+    with _lock:
+        if _opener is None or _crumb is None or _crumb == stale_crumb:
+            _opener, _crumb = _fetch_fresh_session()
         return _opener, _crumb
-    with _lock:
-        if _opener is not None and _crumb is not None:
-            return _opener, _crumb
-        opener, crumb = _fetch_fresh_session()
-        _opener = opener
-        _crumb = crumb
-        return opener, crumb
 
 
-def _reset_session():
-    global _opener, _crumb
-    with _lock:
-        _opener = None
-        _crumb = None
+def _send(
+    opener: urllib.request.OpenerDirector, crumb: str, url: str, params: dict, body: dict | None
+) -> dict:
+    query = urllib.parse.urlencode({**params, "crumb": crumb})
+    req = urllib.request.Request(f"{url}?{query}")
+    if body is not None:
+        req.data = json.dumps(body).encode()
+        req.add_header("Content-Type", "application/json")
+    with opener.open(req, timeout=_TIMEOUT) as resp:
+        return json.loads(resp.read())
 
 
-def _get(url: str, params: dict | None = None) -> dict:
-    opener, crumb = _ensure_session()
-    if params is None:
-        params = {}
-    params["crumb"] = crumb
-    full_url = f"{url}?{urllib.parse.urlencode(params)}"
+def _request(url: str, params: dict | None = None, body: dict | None = None) -> dict:
+    """GET (or POST when body is given), refreshing the session once on 401."""
+    params = params or {}
+    opener, crumb = _session()
     try:
-        return json.loads(opener.open(full_url, timeout=_TIMEOUT).read())
+        return _send(opener, crumb, url, params, body)
     except urllib.error.HTTPError as e:
-        if e.code == 401:
-            _reset_session()
-            opener, crumb = _fetch_fresh_session()
-            with _lock:
-                _opener = opener
-                _crumb = crumb
-            params["crumb"] = crumb
-            full_url = f"{url}?{urllib.parse.urlencode(params)}"
-            return json.loads(opener.open(full_url, timeout=_TIMEOUT).read())
-        raise
-
-
-def _post(url: str, params: dict, body: dict) -> dict:
-    opener, crumb = _ensure_session()
-    params["crumb"] = crumb
-    full_url = f"{url}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(
-        full_url,
-        data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        return json.loads(opener.open(req, timeout=_TIMEOUT).read())
-    except urllib.error.HTTPError as e:
-        if e.code == 401:
-            _reset_session()
-            opener, crumb = _fetch_fresh_session()
-            with _lock:
-                _opener = opener
-                _crumb = crumb
-            params["crumb"] = crumb
-            full_url = f"{url}?{urllib.parse.urlencode(params)}"
-            req = urllib.request.Request(
-                full_url,
-                data=json.dumps(body).encode(),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            return json.loads(opener.open(req, timeout=_TIMEOUT).read())
-        raise
+        if e.code != 401:
+            raise
+    opener, crumb = _session(stale_crumb=crumb)
+    return _send(opener, crumb, url, params, body)
 
 
 def batch_quote(tickers: list[str]) -> dict[str, dict]:
@@ -119,7 +80,7 @@ def batch_quote(tickers: list[str]) -> dict[str, dict]:
     """
     if not tickers:
         return {}
-    data = _get(_QUOTE_URL, {"symbols": ",".join(tickers)})
+    data = _request(_QUOTE_URL, {"symbols": ",".join(tickers)})
     results = {}
     for q in data.get("quoteResponse", {}).get("result", []):
         sym = q.get("symbol")
@@ -156,7 +117,7 @@ def fetch_quote_summary(
 
     Returns a flat dict with raw numeric values.
     """
-    data = _get(f"{_SUMMARY_URL}/{ticker}", {"modules": modules})
+    data = _request(f"{_SUMMARY_URL}/{ticker}", {"modules": modules})
     results = data.get("quoteSummary", {}).get("result", [])
     if not results:
         return {}
@@ -180,7 +141,7 @@ def fetch_chart(ticker: str, range_: str, interval: str) -> dict | None:
              "low": [...], "close": [...], "volume": [...]}
     or None if no data.
     """
-    data = _get(f"{_CHART_URL}/{ticker}", {"range": range_, "interval": interval})
+    data = _request(f"{_CHART_URL}/{ticker}", {"range": range_, "interval": interval})
     results = data.get("chart", {}).get("result")
     if not results:
         return None
@@ -202,16 +163,16 @@ def fetch_chart(ticker: str, range_: str, interval: str) -> dict | None:
 
 def search(query: str, max_results: int = 5) -> list[dict]:
     """Search for tickers. Returns list of {symbol, shortname, exchDisp, ...}."""
-    data = _get(_SEARCH_URL, {"q": query, "quotesCount": max_results})
+    data = _request(_SEARCH_URL, {"q": query, "quotesCount": max_results})
     return data.get("quotes", [])[:max_results]
 
 
 def fetch_news(ticker: str, max_items: int = 8) -> list[dict]:
     """Fetch latest news for a ticker."""
-    data = _post(
+    data = _request(
         _NEWS_URL,
         {"queryRef": "latestNews", "serviceKey": "ncp_fin"},
-        {"serviceConfig": {"snippetCount": max_items, "s": [ticker]}},
+        body={"serviceConfig": {"snippetCount": max_items, "s": [ticker]}},
     )
     stream = data.get("data", {}).get("tickerStream", {}).get("stream", [])
     return [article for article in stream if not article.get("ad", [])]
@@ -220,7 +181,7 @@ def fetch_news(ticker: str, max_items: int = 8) -> list[dict]:
 def validate_ticker(ticker: str) -> bool:
     """Check if a ticker exists and has price data."""
     try:
-        data = _get(f"{_CHART_URL}/{ticker}", {"range": "1d", "interval": "1d"})
+        data = _request(f"{_CHART_URL}/{ticker}", {"range": "1d", "interval": "1d"})
         results = data.get("chart", {}).get("result")
         return results is not None and len(results) > 0
     except Exception:
