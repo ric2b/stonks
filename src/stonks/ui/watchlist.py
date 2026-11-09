@@ -1,4 +1,5 @@
 import sqlite3
+from collections.abc import Iterator
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -297,11 +298,20 @@ class WatchlistWidget(QWidget):
         else:
             self.search_input.selectAll()
 
-    def _add_ticker_by_symbol(self, symbol: str):
+    def _rows(self) -> Iterator[tuple[int, str, WatchlistItemWidget | None]]:
         for i in range(self.list_widget.count()):
-            if self.list_widget.item(i).data(Qt.ItemDataRole.UserRole) == symbol:
-                self.list_widget.setCurrentRow(i)
-                return
+            item = self.list_widget.item(i)
+            yield i, item.data(Qt.ItemDataRole.UserRole), self.list_widget.itemWidget(item)
+
+    def _row_of(self, ticker: str) -> int | None:
+        return next((i for i, t, _ in self._rows() if t == ticker), None)
+
+    def _widget_of(self, ticker: str) -> WatchlistItemWidget | None:
+        return next((w for _, t, w in self._rows() if t == ticker), None)
+
+    def _add_ticker_by_symbol(self, symbol: str):
+        if self.select_ticker(symbol):
+            return
         add_ticker(self.conn, symbol)
         self._add_list_item(symbol)
         self._update_count()
@@ -321,11 +331,11 @@ class WatchlistWidget(QWidget):
             self.list_widget.setCurrentRow(0)
 
     def select_ticker(self, ticker: str) -> bool:
-        for i in range(self.list_widget.count()):
-            if self.list_widget.item(i).data(Qt.ItemDataRole.UserRole) == ticker:
-                self.list_widget.setCurrentRow(i)
-                return True
-        return False
+        row = self._row_of(ticker)
+        if row is None:
+            return False
+        self.list_widget.setCurrentRow(row)
+        return True
 
     def _add_list_item(self, ticker: str, name: str = "", currency: str = ""):
         item = QListWidgetItem()
@@ -362,11 +372,7 @@ class WatchlistWidget(QWidget):
             self.ticker_selected.emit(ticker)
 
     def _on_rows_moved(self):
-        tickers = []
-        for i in range(self.list_widget.count()):
-            item = self.list_widget.item(i)
-            tickers.append(item.data(Qt.ItemDataRole.UserRole))
-        reorder_watchlist(self.conn, tickers)
+        reorder_watchlist(self.conn, self.get_tickers())
 
     def _fetch_names(self):
         tickers = self.get_tickers()
@@ -375,52 +381,30 @@ class WatchlistWidget(QWidget):
         run_async(fetch_names_and_currencies, tickers, on_done=lambda r: self._on_names_fetched(*r))
 
     def _on_names_fetched(self, names: dict, currencies: dict):
-        for i in range(self.list_widget.count()):
-            item = self.list_widget.item(i)
-            ticker = item.data(Qt.ItemDataRole.UserRole)
-            widget = self.list_widget.itemWidget(item)
-            if widget is not None:
-                if ticker in names:
-                    widget.name_label.setText(names[ticker])
-                if ticker in currencies:
-                    pre, suf = currency_format(currencies[ticker])
-                    widget.set_currency(pre, suf)
-                if ticker in names and ticker in currencies:
-                    update_ticker_meta(self.conn, ticker, names[ticker], currencies[ticker])
+        for _, ticker, widget in self._rows():
+            if widget is None:
+                continue
+            if ticker in names:
+                widget.name_label.setText(names[ticker])
+            if ticker in currencies:
+                widget.set_currency(*currency_format(currencies[ticker]))
+            if ticker in names and ticker in currencies:
+                update_ticker_meta(self.conn, ticker, names[ticker], currencies[ticker])
 
     def update_name(self, ticker: str, name: str):
-        for i in range(self.list_widget.count()):
-            item = self.list_widget.item(i)
-            if item.data(Qt.ItemDataRole.UserRole) == ticker:
-                widget = self.list_widget.itemWidget(item)
-                if widget is not None:
-                    widget.name_label.setText(name)
-                break
+        if (widget := self._widget_of(ticker)) is not None:
+            widget.name_label.setText(name)
 
     def update_price(self, ticker: str, price: float, change_pct: float):
-        for i in range(self.list_widget.count()):
-            item = self.list_widget.item(i)
-            if item.data(Qt.ItemDataRole.UserRole) == ticker:
-                widget = self.list_widget.itemWidget(item)
-                if widget is not None:
-                    widget.update_price(price, change_pct)
-                break
+        if (widget := self._widget_of(ticker)) is not None:
+            widget.update_price(price, change_pct)
 
     def update_currency(self, ticker: str, currency_code: str):
-        pre, suf = currency_format(currency_code)
-        for i in range(self.list_widget.count()):
-            item = self.list_widget.item(i)
-            if item.data(Qt.ItemDataRole.UserRole) == ticker:
-                widget = self.list_widget.itemWidget(item)
-                if widget is not None:
-                    widget.set_currency(pre, suf)
-                break
+        if (widget := self._widget_of(ticker)) is not None:
+            widget.set_currency(*currency_format(currency_code))
 
     def _refresh_prices(self):
-        tickers = []
-        for i in range(self.list_widget.count()):
-            item = self.list_widget.item(i)
-            tickers.append(item.data(Qt.ItemDataRole.UserRole))
+        tickers = self.get_tickers()
         if not tickers or self._price_refresh_pending:
             return
         self._price_refresh_pending = True
@@ -433,19 +417,12 @@ class WatchlistWidget(QWidget):
 
     def _on_prices_updated(self, prices: dict):
         self._price_refresh_pending = False
-        for i in range(self.list_widget.count()):
-            item = self.list_widget.item(i)
-            ticker = item.data(Qt.ItemDataRole.UserRole)
-            widget = self.list_widget.itemWidget(item)
+        for _, ticker, widget in self._rows():
             if ticker in prices and widget is not None:
-                price, change_pct = prices[ticker]
-                widget.update_price(price, change_pct)
+                widget.update_price(*prices[ticker])
 
     def get_tickers(self) -> list[str]:
-        return [
-            self.list_widget.item(i).data(Qt.ItemDataRole.UserRole)
-            for i in range(self.list_widget.count())
-        ]
+        return [ticker for _, ticker, _ in self._rows()]
 
     def focus_search(self):
         self.search_input.setFocus()
