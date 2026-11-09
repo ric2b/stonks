@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 
 from stonks.services.stock_data import (
@@ -39,8 +40,8 @@ def test_fetch_history_returns_history_data(mock_chart):
     hd = fetch_history("AAPL", "1mo", "1d")
     assert isinstance(hd, HistoryData)
     assert not hd.empty
-    assert len(hd.index) == 5
-    assert "Close" in hd.columns
+    assert len(hd.timestamps) == 5
+    assert hd.close[-1] == 107.0
     mock_chart.assert_called_once_with("AAPL", range_="1mo", interval="1d")
 
 
@@ -121,19 +122,14 @@ def test_fetch_info_refetches_after_ttl(mock_quote, mock_summary, mock_time):
 @patch("stonks.services.stock_data.yahoo_api.fetch_chart")
 def test_populate_history_cache_is_found_by_fetch_history(mock_chart):
     hd = HistoryData(
-        [1704067200 + i * 86400 for i in range(5)],
-        {
-            "Close": [100.0] * 5,
-            "Open": [99.0] * 5,
-            "High": [101.0] * 5,
-            "Low": [98.0] * 5,
-            "Volume": [1e6] * 5,
-        },
+        timestamps=np.arange(5, dtype=float),
+        close=np.full(5, 100.0),
+        volume=np.full(5, 1e6),
     )
     populate_history_cache({"AAPL": hd}, "1mo", "1d")
     result = fetch_history("AAPL", "1mo", "1d")
     mock_chart.assert_not_called()
-    assert len(result.index) == 5
+    assert len(result.timestamps) == 5
 
 
 # ── batch_fetch_history ──────────────────────────────────────────────────────
@@ -144,7 +140,7 @@ def test_batch_fetch_history_single_ticker(mock_chart):
     mock_chart.return_value = _make_chart_response(closes=[100.0, 101.0, 102.0], n=3)
     results = batch_fetch_history(["AAPL"], "1mo", "1d")
     assert "AAPL" in results
-    assert list(results["AAPL"]["Close"]) == [100.0, 101.0, 102.0]
+    assert list(results["AAPL"].close) == [100.0, 101.0, 102.0]
 
 
 @patch("stonks.services.stock_data.yahoo_api.fetch_chart")
@@ -155,8 +151,8 @@ def test_batch_fetch_history_multi_ticker(mock_chart):
     ]
     results = batch_fetch_history(["AAPL", "MSFT"], "1mo", "1d")
     assert set(results.keys()) == {"AAPL", "MSFT"}
-    assert results["AAPL"]["Close"][0] == 100.0
-    assert results["MSFT"]["Close"][0] == 200.0
+    assert results["AAPL"].close[0] == 100.0
+    assert results["MSFT"].close[0] == 200.0
 
 
 @patch("stonks.services.stock_data.yahoo_api.fetch_chart")
@@ -364,3 +360,15 @@ def test_ttl_cache_without_ttl_never_expires(mock_time):
     cache.set("AAPL", "Apple")
     mock_time.return_value = 1e9
     assert cache.get("AAPL") == "Apple"
+
+
+@patch("stonks.services.stock_data.yahoo_api.fetch_chart")
+def test_fetch_history_turns_missing_points_into_nan(mock_chart):
+    response = _make_chart_response(n=3)
+    response["close"] = [1.0, None, 3.0]
+    response["volume"] = [10, None, 30]
+    mock_chart.return_value = response
+    hd = fetch_history("AAPL", "1mo", "1d")
+    assert np.isnan(hd.close[1])
+    assert np.isnan(hd.volume[1])
+    assert hd.close[2] == 3.0
