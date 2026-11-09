@@ -99,7 +99,7 @@ Module-level `TTLCache` instances (a dict guarded by a lock, since worker thread
 | `_news_cache` (`fetch_news()`) | 5 minutes | Avoids re-fetching news when re-selecting a ticker |
 | `_meta_cache` (`fetch_names_and_currencies()`) | never | Company name + currency per ticker |
 
-Expired entries are swept at most once per TTL period on write, keeping memory bounded.
+`get()` (used by the `fetch_*` functions) only returns entries younger than the TTL. Expired entries are retained for an hour so `peek_history()` / `peek_info()` / `peek_news()` can return them with an `is_fresh` flag: on selection the UI renders whatever is cached synchronously (no loading flash) and refreshes in the background when it is stale. Only data never seen in the last hour shows the chart's loading spinner. Entries older than the retention period are swept at most once per period on write, keeping memory bounded.
 
 The prefetch populates `_history_cache` via `populate_history_cache()`, using the same keys as `fetch_history()`.
 
