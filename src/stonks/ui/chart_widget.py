@@ -18,8 +18,8 @@ from PySide6.QtWidgets import (
 
 from stonks.config import INTRADAY_INTERVALS, TIME_RANGES
 from stonks.models.database import set_setting
-from stonks.services.stock_data import HistoryData, currency_format
-from stonks.ui.workers import HistoryWorker, shutdown_workers, track_worker
+from stonks.services.stock_data import HistoryData, currency_format, fetch_history
+from stonks.ui.workers import run_async
 
 _DASH = Qt.PenStyle.DashLine
 _DAILY_INTERVALS = {"1d", "5d", "1wk", "1mo", "3mo"}
@@ -76,7 +76,6 @@ class ChartWidget(QWidget):
         self.conn = conn
         self._current_ticker = None
         self._current_period = "1M"
-        self._workers: list[HistoryWorker] = []
         self._is_up = True
 
         self._refresh_timer = QTimer(self)
@@ -266,11 +265,14 @@ class ChartWidget(QWidget):
             self._refresh_timer.start()
         else:
             self._refresh_timer.stop()
-        worker = HistoryWorker(ticker, yf_period, yf_interval)
-        worker.finished.connect(lambda history, t=ticker: self._on_data_received(history, t))
-        worker.error.connect(lambda _err, t=ticker: self._on_data_error(t))
-        track_worker(self._workers, worker)
-        worker.start()
+        run_async(
+            fetch_history,
+            ticker,
+            yf_period,
+            yf_interval,
+            on_done=lambda history: self._on_data_received(history, ticker),
+            on_error=lambda _e: self._on_data_error(ticker),
+        )
 
     def set_company_info(self, ticker: str, name: str, exchange: str, currency: str):
         if ticker != self._current_ticker:
@@ -293,10 +295,6 @@ class ChartWidget(QWidget):
         labels = list(TIME_RANGES.keys())
         current = labels.index(self._current_period)
         self.set_range_by_index(max(0, min(current + delta, len(labels) - 1)))
-
-    def shutdown(self):
-        self._refresh_timer.stop()
-        shutdown_workers(self._workers)
 
     def _hide_crosshair(self):
         self._vline.setVisible(False)

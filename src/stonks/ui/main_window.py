@@ -17,11 +17,15 @@ from PySide6.QtWidgets import (
 
 from stonks.config import APP_NAME, APP_VERSION, TIME_RANGES
 from stonks.models.database import get_setting, set_setting, update_ticker_meta
-from stonks.services.stock_data import is_history_cached
+from stonks.services.stock_data import (
+    batch_fetch_history,
+    is_history_cached,
+    populate_history_cache,
+)
 from stonks.ui.chart_widget import ChartWidget
 from stonks.ui.detail_view import DetailView, NewsWidget
 from stonks.ui.watchlist import WatchlistWidget
-from stonks.ui.workers import PrefetchWorker, shutdown_workers, track_worker
+from stonks.ui.workers import run_async
 
 
 class _StatusBar(QWidget):
@@ -194,8 +198,6 @@ class MainWindow(QMainWindow):
         self.status_bar = _StatusBar()
         main_layout.addWidget(self.status_bar)
 
-        self._workers: list[PrefetchWorker] = []
-
         self.watchlist.ticker_selected.connect(self._on_ticker_selected)
         self.watchlist.watchlist_emptied.connect(self._show_empty_state)
         self.detail_view.info_received.connect(self.chart.set_company_info)
@@ -269,17 +271,13 @@ class MainWindow(QMainWindow):
         tickers = self.watchlist.get_tickers()
         if not tickers:
             return
-        worker = PrefetchWorker(tickers, yf_period, yf_interval)
-        track_worker(self._workers, worker)
-        worker.start()
-
-    def closeEvent(self, event):
-        self.watchlist.shutdown()
-        self.chart.shutdown()
-        self.detail_view.shutdown()
-        self.news_widget.shutdown()
-        shutdown_workers(self._workers)
-        super().closeEvent(event)
+        run_async(
+            batch_fetch_history,
+            tickers,
+            yf_period,
+            yf_interval,
+            on_done=lambda results: populate_history_cache(results, yf_period, yf_interval),
+        )
 
     def _on_info_received(self, ticker: str, name: str, exchange: str, currency: str):
         self.watchlist.update_name(ticker, name)

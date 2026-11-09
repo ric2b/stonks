@@ -1,194 +1,55 @@
 import logging
+import threading
+from collections.abc import Callable
+from functools import partial
+from typing import Any
 
-from PySide6.QtCore import QThread, Signal
-
-from stonks.services.stock_data import (
-    batch_fetch_history,
-    fetch_info,
-    fetch_names_and_currencies,
-    fetch_news,
-    fetch_prices,
-    populate_history_cache,
-    search_tickers,
-    validate_ticker,
-)
+from PySide6.QtCore import QObject, Qt, Signal
 
 logger = logging.getLogger(__name__)
 
 
-_closing_workers: list[QThread] = []
+class _MainThreadBridge(QObject):
+    deliver = Signal(object)
 
-
-def track_worker(workers: list[QThread], worker: QThread) -> None:
-    def remove(*_args):
-        if worker in workers:
-            workers.remove(worker)
-
-    for sig_name in ("finished", "error"):
-        sig = getattr(worker, sig_name, None)
-        if sig is not None:
-            sig.connect(remove)
-    workers.append(worker)
-
-
-def shutdown_workers(workers: list[QThread]) -> None:
-    for w in workers:
-        w.requestInterruption()
-        w.quit()
-    _closing_workers.extend(w for w in workers if w.isRunning())
-    workers.clear()
-
-
-def wait_for_closing_workers(timeout_ms: int = 2000) -> None:
-    # A QThread destroyed while still running makes Qt abort the process during
-    # interpreter finalize. quit()/requestInterruption() can't unblock a thread
-    # stuck in a blocking socket read, so terminate any straggler that ignores
-    # the graceful wait before it reaches the destructor.
-    for w in _closing_workers:
-        if not w.wait(timeout_ms):
-            logger.warning("Worker %s did not stop; terminating", w.objectName())
-            w.terminate()
-            w.wait()
-    _closing_workers.clear()
-
-
-class ValidateWorker(QThread):
-    finished = Signal(bool, str)
-    error = Signal(str)
-
-    def __init__(self, ticker: str):
+    def __init__(self):
         super().__init__()
-        self.setObjectName(f"ValidateWorker({ticker})")
-        self.ticker = ticker
+        self.deliver.connect(self._run, Qt.ConnectionType.QueuedConnection)
 
-    def run(self):
+    def _run(self, callback: Callable[[], None]) -> None:
+        callback()
+
+
+_bridge: _MainThreadBridge | None = None
+
+
+def run_async(
+    fn: Callable[..., Any],
+    *args: Any,
+    on_done: Callable[[Any], None] | None = None,
+    on_error: Callable[[Exception], None] | None = None,
+) -> None:
+    """Run fn(*args) on a background thread and pass the outcome to a callback
+    on the Qt main thread. Must be called from the main thread.
+
+    Daemon threads are used instead of QThread: there is no Qt object whose
+    destruction can race the running thread, and a request stuck in a socket
+    read cannot hold up quitting the app.
+    """
+    global _bridge
+    if _bridge is None:
+        _bridge = _MainThreadBridge()
+    bridge = _bridge
+
+    def work():
         try:
-            valid = validate_ticker(self.ticker)
-            self.finished.emit(valid, self.ticker)
+            result = fn(*args)
         except Exception as e:
-            self.error.emit(str(e))
+            logger.debug("Background task %s failed: %s", getattr(fn, "__name__", fn), e)
+            if on_error is not None:
+                bridge.deliver.emit(partial(on_error, e))
+            return
+        if on_done is not None:
+            bridge.deliver.emit(partial(on_done, result))
 
-
-class HistoryWorker(QThread):
-    finished = Signal(object)
-    error = Signal(str)
-
-    def __init__(self, ticker: str, period: str, interval: str):
-        super().__init__()
-        self.setObjectName(f"HistoryWorker({ticker},{period},{interval})")
-        self.ticker = ticker
-        self.period = period
-        self.interval = interval
-
-    def run(self):
-        try:
-            from stonks.services.stock_data import fetch_history
-
-            df = fetch_history(self.ticker, self.period, self.interval)
-            self.finished.emit(df)
-        except Exception as e:
-            self.error.emit(str(e))
-
-
-class InfoWorker(QThread):
-    finished = Signal(dict)
-    error = Signal(str)
-
-    def __init__(self, ticker: str):
-        super().__init__()
-        self.setObjectName(f"InfoWorker({ticker})")
-        self.ticker = ticker
-
-    def run(self):
-        try:
-            info = fetch_info(self.ticker)
-            self.finished.emit(info)
-        except Exception as e:
-            self.error.emit(str(e))
-
-
-class SearchWorker(QThread):
-    finished = Signal(list)
-    error = Signal(str)
-
-    def __init__(self, query: str):
-        super().__init__()
-        self.setObjectName(f"SearchWorker({query})")
-        self.query = query
-
-    def run(self):
-        try:
-            results = search_tickers(self.query)
-            self.finished.emit(results)
-        except Exception as e:
-            self.error.emit(str(e))
-
-
-class PriceUpdateWorker(QThread):
-    finished = Signal(dict)
-    error = Signal(str)
-
-    def __init__(self, tickers: list[str]):
-        super().__init__()
-        self.setObjectName(f"PriceUpdateWorker({','.join(tickers)})")
-        self.tickers = tickers
-
-    def run(self):
-        try:
-            results, _no_data = fetch_prices(self.tickers)
-            self.finished.emit(results)
-        except Exception as e:
-            logger.debug("Price fetch failed: %s", e)
-            self.error.emit(str(e))
-
-
-class NameFetchWorker(QThread):
-    finished = Signal(dict, dict)
-
-    def __init__(self, tickers: list[str]):
-        super().__init__()
-        self.setObjectName(f"NameFetchWorker({','.join(tickers)})")
-        self.tickers = tickers
-
-    def run(self):
-        try:
-            names, currencies = fetch_names_and_currencies(self.tickers)
-            self.finished.emit(names, currencies)
-        except Exception as e:
-            logger.debug("Name fetch failed: %s", e)
-
-
-class NewsWorker(QThread):
-    finished = Signal(list)
-    error = Signal(str)
-
-    def __init__(self, ticker: str):
-        super().__init__()
-        self.setObjectName(f"NewsWorker({ticker})")
-        self.ticker = ticker
-
-    def run(self):
-        try:
-            items = fetch_news(self.ticker)
-            self.finished.emit(items)
-        except Exception as e:
-            self.error.emit(str(e))
-
-
-class PrefetchWorker(QThread):
-    # No custom finished signal — QThread.finished fires exactly once when run()
-    # returns, avoiding the double-emit that occurs when shadowing it with Signal().
-
-    def __init__(self, tickers: list[str], period: str, interval: str):
-        super().__init__()
-        self.setObjectName(f"PrefetchWorker({','.join(tickers)})")
-        self.tickers = tickers
-        self.period = period
-        self.interval = interval
-
-    def run(self):
-        try:
-            results = batch_fetch_history(self.tickers, self.period, self.interval)
-            populate_history_cache(results, self.period, self.interval)
-        except Exception as e:
-            logger.debug("Prefetch failed: %s", e)
+    threading.Thread(target=work, daemon=True).start()

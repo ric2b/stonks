@@ -11,8 +11,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from stonks.services.stock_data import currency_format
-from stonks.ui.workers import InfoWorker, NewsWorker, shutdown_workers, track_worker
+from stonks.services.stock_data import currency_format, fetch_info, fetch_news, price_and_change
+from stonks.ui.workers import run_async
 
 STAT_COLUMNS = [
     [
@@ -152,7 +152,6 @@ class NewsWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._current_ticker = None
-        self._workers: list[NewsWorker] = []
 
         self.setStyleSheet("background-color: #242424;")
 
@@ -180,17 +179,11 @@ class NewsWidget(QWidget):
         scroll.setWidget(self._news_container)
         outer.addWidget(scroll, 1)
 
-    def shutdown(self):
-        shutdown_workers(self._workers)
-
     def update_news(self, ticker: str):
         self._current_ticker = ticker
         self._clear_news()
 
-        worker = NewsWorker(ticker)
-        worker.finished.connect(lambda items, t=ticker: self._on_news_received(items, t))
-        track_worker(self._workers, worker)
-        worker.start()
+        run_async(fetch_news, ticker, on_done=lambda items: self._on_news_received(items, ticker))
 
     def _clear_news(self):
         self._news_header.hide()
@@ -232,7 +225,6 @@ class DetailView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._current_ticker = None
-        self._workers: list[InfoWorker] = []
         self._value_labels: dict[str, QLabel] = {}
 
         self.setStyleSheet("background-color: #242424;")
@@ -269,18 +261,12 @@ class DetailView(QWidget):
 
         outer.addWidget(cols_widget, 1)
 
-    def shutdown(self):
-        shutdown_workers(self._workers)
-
     def update_detail(self, ticker: str):
         self._current_ticker = ticker
         for lbl in self._value_labels.values():
             lbl.setText("--")
 
-        worker = InfoWorker(ticker)
-        worker.finished.connect(lambda info, t=ticker: self._on_info_received(info, t))
-        track_worker(self._workers, worker)
-        worker.start()
+        run_async(fetch_info, ticker, on_done=lambda info: self._on_info_received(info, ticker))
 
     def _on_info_received(self, info: dict, ticker: str):
         if ticker != self._current_ticker:
@@ -302,14 +288,9 @@ class DetailView(QWidget):
         exchange = info.get("fullExchangeName") or info.get("exchange") or ""
         self.info_received.emit(ticker, name, exchange, currency_code)
 
-        price = info.get("regularMarketPrice")
-        if price is not None:
-            change_pct = info.get("regularMarketChangePercent")
-            if change_pct is None:
-                prev = info.get("regularMarketPreviousClose")
-                if prev and prev != 0:
-                    change_pct = ((price - prev) / prev) * 100
-            self.price_received.emit(ticker, float(price), float(change_pct or 0.0))
+        priced = price_and_change(info)
+        if priced is not None:
+            self.price_received.emit(ticker, *priced)
 
         market_state = info.get("marketState") or "CLOSED"
         delay = int(info.get("exchangeDataDelayedBy") or 0)
