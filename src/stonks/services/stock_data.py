@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -72,26 +73,56 @@ class HistoryData:
         return np.array(self._ohlcv[key], dtype=float)
 
 
-_info_cache: dict[str, tuple[dict, float]] = {}
-_history_cache: dict[tuple, tuple[HistoryData, float]] = {}
-_INFO_TTL = 300.0
-_HISTORY_TTL = 60.0
+class TTLCache[K, V]:
+    """Thread-safe dict whose entries expire after ``ttl`` seconds (never if None)."""
+
+    def __init__(self, ttl: float | None):
+        self._ttl = ttl
+        self._data: dict[K, tuple[V, float]] = {}
+        self._lock = threading.Lock()
+        self._next_sweep = 0.0
+
+    def get(self, key: K) -> V | None:
+        with self._lock:
+            entry = self._data.get(key)
+        if entry is None:
+            return None
+        value, stored_at = entry
+        if self._ttl is not None and time.monotonic() - stored_at >= self._ttl:
+            return None
+        return value
+
+    def set(self, key: K, value: V) -> None:
+        now = time.monotonic()
+        with self._lock:
+            if self._ttl is not None and now >= self._next_sweep:
+                self._data = {k: e for k, e in self._data.items() if now - e[1] < self._ttl}
+                self._next_sweep = now + self._ttl
+            self._data[key] = (value, now)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._data.clear()
+
+
+_info_cache: TTLCache[str, dict] = TTLCache(ttl=300.0)
+_history_cache: TTLCache[tuple[str, str, str], HistoryData] = TTLCache(ttl=60.0)
+_name_cache: TTLCache[str, str] = TTLCache(ttl=None)
+_news_cache: TTLCache[str, list[dict]] = TTLCache(ttl=300.0)
 
 
 def fetch_history(ticker: str, period: str, interval: str) -> HistoryData:
     key = (ticker, period, interval)
-    now = time.monotonic()
     cached = _history_cache.get(key)
-    if cached is not None and now - cached[1] < _HISTORY_TTL:
-        return cached[0]
+    if cached is not None:
+        return cached
     raw = yahoo_api.fetch_chart(ticker, range_=period, interval=interval)
     if raw is None:
         raise ValueError(f"No data returned for {ticker}")
     hd = _chart_to_history(raw)
     if hd.empty:
         raise ValueError(f"No data returned for {ticker}")
-    _evict_history_cache(now)
-    _history_cache[key] = (hd, now)
+    _history_cache.set(key, hd)
     return hd
 
 
@@ -108,15 +139,14 @@ def _chart_to_history(raw: dict) -> HistoryData:
     )
 
 
-def fetch_info(ticker: str, max_age: float = _INFO_TTL) -> dict:
-    now = time.monotonic()
+def fetch_info(ticker: str) -> dict:
     cached = _info_cache.get(ticker)
-    if cached is not None and now - cached[1] < max_age:
-        return cached[0]
+    if cached is not None:
+        return cached
     quote = yahoo_api.batch_quote([ticker]).get(ticker, {})
     summary = yahoo_api.fetch_quote_summary(ticker)
     summary.update(quote)
-    _info_cache[ticker] = (summary, now)
+    _info_cache.set(ticker, summary)
     return summary
 
 
@@ -146,38 +176,23 @@ def batch_fetch_history(tickers: list[str], period: str, interval: str) -> dict[
 
 
 def populate_history_cache(results: dict[str, HistoryData], period: str, interval: str) -> None:
-    now = time.monotonic()
-    _evict_history_cache(now)
     for ticker, hd in results.items():
-        _history_cache[(ticker, period, interval)] = (hd, now)
+        _history_cache.set((ticker, period, interval), hd)
 
 
 def is_history_cached(ticker: str, period: str, interval: str) -> bool:
-    key = (ticker, period, interval)
-    cached = _history_cache.get(key)
-    if cached is None:
-        return False
-    return time.monotonic() - cached[1] < _HISTORY_TTL
-
-
-def _evict_history_cache(now: float) -> None:
-    stale = [k for k, (_, t) in _history_cache.items() if now - t >= _HISTORY_TTL]
-    for k in stale:
-        del _history_cache[k]
-
-
-_name_cache: dict[str, str] = {}
+    return _history_cache.get((ticker, period, interval)) is not None
 
 
 def fetch_names(tickers: list[str]) -> dict[str, str]:
-    uncached = [t for t in tickers if t not in _name_cache]
+    uncached = [t for t in tickers if _name_cache.get(t) is None]
     if uncached:
         quotes = yahoo_api.batch_quote(uncached)
         for sym, info in quotes.items():
             name = info.get("longName") or info.get("shortName") or ""
             if name:
-                _name_cache[sym] = name
-    return {t: _name_cache[t] for t in tickers if t in _name_cache}
+                _name_cache.set(sym, name)
+    return {t: name for t in tickers if (name := _name_cache.get(t)) is not None}
 
 
 def fetch_prices(tickers: list[str]) -> tuple[dict[str, tuple[float, float]], set[str]]:
@@ -203,7 +218,7 @@ def fetch_prices(tickers: list[str]) -> tuple[dict[str, tuple[float, float]], se
             if prev and prev != 0:
                 change_pct = ((price - prev) / prev) * 100
         results[ticker] = (price, change_pct if change_pct is not None else 0.0)
-        _info_cache[ticker] = (info, time.monotonic())
+        _info_cache.set(ticker, info)
     return results, no_data
 
 
@@ -212,7 +227,7 @@ def fetch_currencies(tickers: list[str]) -> dict[str, str]:
     for ticker in tickers:
         cached = _info_cache.get(ticker)
         if cached is not None:
-            code = cached[0].get("currency") or ""
+            code = cached.get("currency") or ""
             if code:
                 results[ticker] = code
     return results
@@ -235,15 +250,10 @@ def search_tickers(query: str, max_results: int = 5) -> list[dict]:
     return out
 
 
-_news_cache: dict[str, tuple[list[dict], float]] = {}
-_NEWS_TTL = 300.0
-
-
 def fetch_news(ticker: str, max_items: int = 8) -> list[dict]:
-    now = time.monotonic()
     cached = _news_cache.get(ticker)
-    if cached is not None and now - cached[1] < _NEWS_TTL:
-        return cached[0]
+    if cached is not None:
+        return cached
     raw = yahoo_api.fetch_news(ticker, max_items=max_items)
     items = []
     for entry in raw:
@@ -268,7 +278,7 @@ def fetch_news(ticker: str, max_items: int = 8) -> list[dict]:
                 "pubDate": pub_date,
             }
         )
-    _news_cache[ticker] = (items, now)
+    _news_cache.set(ticker, items)
     return items
 
 

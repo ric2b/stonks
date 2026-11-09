@@ -317,7 +317,7 @@ def test_fetch_names_skips_tickers_with_no_name(mock_quote):
 def test_fetch_currencies_returns_cached_currencies():
     from stonks.services import stock_data
 
-    stock_data._info_cache["AAPL"] = ({"currency": "USD"}, 0.0)
+    stock_data._info_cache.set("AAPL", {"currency": "USD"})
     result = fetch_currencies(["AAPL"])
     assert result == {"AAPL": "USD"}
 
@@ -325,3 +325,41 @@ def test_fetch_currencies_returns_cached_currencies():
 def test_fetch_currencies_skips_uncached_tickers():
     result = fetch_currencies(["AAPL"])
     assert result == {}
+
+
+# ── TTLCache ────────────────────────────────────────────────────────────────
+
+
+def test_ttl_cache_survives_concurrent_writers():
+    import threading
+
+    from stonks.services.stock_data import TTLCache
+
+    cache = TTLCache(ttl=60.0)
+    errors = []
+
+    def writer(offset):
+        try:
+            for i in range(2000):
+                cache.set((offset, i), i)
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=writer, args=(n,)) for n in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert cache.get((7, 1999)) == 1999
+
+
+@patch("stonks.services.stock_data.time.monotonic")
+def test_ttl_cache_without_ttl_never_expires(mock_time):
+    from stonks.services.stock_data import TTLCache
+
+    cache = TTLCache(ttl=None)
+    mock_time.return_value = 0.0
+    cache.set("AAPL", "Apple")
+    mock_time.return_value = 1e9
+    assert cache.get("AAPL") == "Apple"
