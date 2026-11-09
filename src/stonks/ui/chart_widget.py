@@ -447,9 +447,9 @@ class ChartWidget(QWidget):
         self.price_widget.plot(
             plot_ts, plot_prices, pen=pen, fillLevel=float(plot_prices.min()), brush=brush
         )
-        self.price_widget.autoRange()
 
-        # Constrain x zoom-out to the data extent
+        # Constrain x zoom-out to the data extent. Set before autoRange so limits
+        # from the previously shown range can't clamp the new view.
         x_span = float(timestamps[-1]) - float(timestamps[0])
         buf = x_span * 0.01
         self.price_widget.plotItem.vb.setLimits(
@@ -457,6 +457,7 @@ class ChartWidget(QWidget):
             xMax=float(timestamps[-1]) + buf,
             maxXRange=x_span + buf * 2,
         )
+        self.price_widget.autoRange()
 
         # Update track dot colour to match line
         self._track_dot.setBrush(pg.mkBrush(color))
