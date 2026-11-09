@@ -77,6 +77,8 @@ class ChartWidget(QWidget):
         self._current_ticker = None
         self._current_period = "1M"
         self._is_up = True
+        self._request_id = 0
+        self._pending_request: int | None = None
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(5 * 60 * 1000)
@@ -244,11 +246,9 @@ class ChartWidget(QWidget):
         self._currency_prefix = ""
         self._currency_suffix = ""
 
-    def update_chart(self, ticker: str, period: str | None = None):
+    def update_chart(self, ticker: str):
         ticker_changed = ticker != self._current_ticker
         self._current_ticker = ticker
-        if period is not None:
-            self._current_period = period
 
         self.symbol_label.setText(ticker)
         if ticker_changed:
@@ -259,20 +259,34 @@ class ChartWidget(QWidget):
         self.price_label.setText("--")
         self.change_label.setText("")
         self._show_status("Loading...")
+        self._sync_refresh_timer()
+        self._request_history()
 
-        yf_period, yf_interval = TIME_RANGES[self._current_period]
-        if yf_interval in INTRADAY_INTERVALS:
+    def _sync_refresh_timer(self):
+        _, interval = TIME_RANGES[self._current_period]
+        if interval in INTRADAY_INTERVALS:
             self._refresh_timer.start()
         else:
             self._refresh_timer.stop()
+
+    def _request_history(self):
+        self._request_id += 1
+        request_id = self._pending_request = self._request_id
+        yf_period, yf_interval = TIME_RANGES[self._current_period]
         run_async(
             fetch_history,
-            ticker,
+            self._current_ticker,
             yf_period,
             yf_interval,
-            on_done=lambda history: self._on_data_received(history, ticker),
-            on_error=lambda _e: self._on_data_error(ticker),
+            on_done=lambda history: self._on_data_received(history, request_id),
+            on_error=lambda _e: self._on_data_error(request_id),
         )
+
+    def _is_latest_request(self, request_id: int) -> bool:
+        if request_id != self._request_id:
+            return False
+        self._pending_request = None
+        return True
 
     def set_company_info(self, ticker: str, name: str, exchange: str, currency: str):
         if ticker != self._current_ticker:
@@ -331,18 +345,15 @@ class ChartWidget(QWidget):
         labels = list(TIME_RANGES.keys())
         self._current_period = labels[button_id]
         set_setting(self.conn, "last_period", self._current_period)
-        _, interval = TIME_RANGES[self._current_period]
-        if interval in INTRADAY_INTERVALS:
-            self._refresh_timer.start()
-        else:
-            self._refresh_timer.stop()
+        self._sync_refresh_timer()
         self.range_changed.emit(self._current_period)
         if self._current_ticker:
             self.update_chart(self._current_ticker)
 
     def _auto_refresh(self):
-        if self._current_ticker:
-            self.update_chart(self._current_ticker)
+        # Keep the current plot on screen; it is replaced only when new data arrives.
+        if self._current_ticker and self._pending_request is None:
+            self._request_history()
 
     def _update_price_display(self):
         if self._prices is None or len(self._prices) == 0:
@@ -364,8 +375,8 @@ class ChartWidget(QWidget):
             f"({sign}{abs_pct:.2f}%)</span>"
         )
 
-    def _on_data_received(self, history: HistoryData, ticker: str):
-        if ticker != self._current_ticker:
+    def _on_data_received(self, history: HistoryData, request_id: int):
+        if not self._is_latest_request(request_id):
             return
 
         self._status_label.setVisible(False)
@@ -441,8 +452,8 @@ class ChartWidget(QWidget):
         else:
             self.vol_widget.setVisible(False)
 
-    def _on_data_error(self, ticker: str):
-        if ticker != self._current_ticker:
+    def _on_data_error(self, request_id: int):
+        if not self._is_latest_request(request_id) or self._prices is not None:
             return
         self._show_status("Failed to load data.")
 

@@ -122,3 +122,41 @@ def test_selecting_ticker_survives_chart_failure(qtbot, db, yahoo):
             timeout=3000,
         )
     assert window.watchlist.list_widget.currentItem().data(Qt.ItemDataRole.UserRole) == "AAPL"
+
+
+def test_failed_background_chart_refresh_keeps_current_plot(qtbot, db, yahoo):
+    add_ticker(db, "AAPL")
+    window = MainWindow(db)
+    qtbot.addWidget(window)
+    chart = window.chart
+    qtbot.waitUntil(lambda: chart.price_label.text().startswith("$109.0"), timeout=3000)
+
+    with patch("stonks.ui.chart_widget.fetch_history", side_effect=OSError("timeout")):
+        chart._auto_refresh()
+        qtbot.waitUntil(lambda: chart._pending_request is None, timeout=3000)
+
+    assert chart.price_label.text().startswith("$109.0")
+    assert not chart._status_label.isVisible()
+
+
+def test_slow_chart_response_for_previous_ticker_is_ignored(qtbot, db, yahoo):
+    add_ticker(db, "AAPL")
+    add_ticker(db, "MSFT")
+    release_aapl = threading.Event()
+    msft_chart = {**CHART, "close": [400.0 + i for i in range(10)]}
+
+    def fetch_chart(ticker, range_, interval):
+        if ticker == "AAPL":
+            release_aapl.wait(2)
+            return CHART
+        return msft_chart
+
+    with patch.object(yahoo_api, "fetch_chart", side_effect=fetch_chart):
+        window = MainWindow(db)
+        qtbot.addWidget(window)
+        window.watchlist.select_ticker("MSFT")
+        qtbot.waitUntil(lambda: "409.0" in window.chart.price_label.text(), timeout=3000)
+        release_aapl.set()
+        qtbot.wait(200)
+
+    assert "409.0" in window.chart.price_label.text()
