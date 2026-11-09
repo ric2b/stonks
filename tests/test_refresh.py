@@ -226,3 +226,22 @@ def test_switching_to_longer_cached_range_shows_the_whole_range(qtbot, db, yahoo
 
     x_min, x_max = chart.price_widget.viewRange()[0]
     assert x_min >= -day and x_max <= 30 * day
+
+
+def test_leftover_crosshair_does_not_stretch_y_range_of_next_chart(qtbot, db, yahoo):
+    add_ticker(db, "AAPL")
+    window = MainWindow(db)
+    qtbot.addWidget(window)
+    chart = window.chart
+    qtbot.waitUntil(lambda: chart._prices is not None and chart._pending_request is None)
+
+    # Crosshair left showing a price from a previously viewed, much cheaper ticker.
+    chart._hline.setPos(10.0)
+    chart._hline.setVisible(True)
+    chart._track_dot.setData([chart._timestamps[0]], [10.0])
+    chart._track_dot.setVisible(True)
+
+    chart.update_chart("AAPL")
+
+    y_min, _ = chart.price_widget.viewRange()[1]
+    assert y_min > 90

@@ -198,19 +198,19 @@ class ChartWidget(QWidget):
         # ── Crosshair: vertical + horizontal lines ──────────
         self._status_label = pg.TextItem(anchor=(0.5, 0.5), color="#9e9e9e")
         self._status_label.setVisible(False)
-        self.price_widget.addItem(self._status_label)
+        self.price_widget.addItem(self._status_label, ignoreBounds=True)
 
         self._vline = pg.InfiniteLine(
             angle=90, movable=False, pen=pg.mkPen("#666", width=1, style=_DASH)
         )
         self._vline.setVisible(False)
-        self.price_widget.addItem(self._vline)
+        self.price_widget.addItem(self._vline, ignoreBounds=True)
 
         self._hline = pg.InfiniteLine(
             angle=0, movable=False, pen=pg.mkPen("#666", width=1, style=_DASH)
         )
         self._hline.setVisible(False)
-        self.price_widget.addItem(self._hline)
+        self.price_widget.addItem(self._hline, ignoreBounds=True)
 
         # Tracking dot on the chart line
         self._track_dot = pg.ScatterPlotItem(
@@ -219,7 +219,7 @@ class ChartWidget(QWidget):
             brush=pg.mkBrush("#4cd278"),
         )
         self._track_dot.setVisible(False)
-        self.price_widget.addItem(self._track_dot)
+        self.price_widget.addItem(self._track_dot, ignoreBounds=True)
 
         self._hover_price = QLabel(self.price_widget)
         self._hover_price.setObjectName("chartHoverPrice")
@@ -238,12 +238,12 @@ class ChartWidget(QWidget):
         )
         self._drag_anchor.setZValue(20)
         self._drag_anchor.setVisible(False)
-        self.price_widget.addItem(self._drag_anchor)
+        self.price_widget.addItem(self._drag_anchor, ignoreBounds=True)
 
         self._drag_region = pg.PlotDataItem(pen=pg.mkPen(None))
         self._drag_region.setZValue(5)
         self._drag_region.setVisible(False)
-        self.price_widget.addItem(self._drag_region)
+        self.price_widget.addItem(self._drag_region, ignoreBounds=True)
 
         self.price_widget.viewport().installEventFilter(self)
         self.price_widget.scene().sigMouseMoved.connect(self._on_mouse_moved)
@@ -346,16 +346,24 @@ class ChartWidget(QWidget):
         self._spinner_frame = (self._spinner_frame + 1) % len(_SPINNER)
         self._status_label.setText(f"{_SPINNER[self._spinner_frame]}  Loading")
 
-    def _show_status(self, text: str):
+    def _reset_plot(self):
         self._spinner_timer.stop()
         self._hide_crosshair()
         self.price_widget.clear()
-        self.price_widget.addItem(self._vline)
-        self.price_widget.addItem(self._hline)
-        self.price_widget.addItem(self._track_dot)
-        self.price_widget.addItem(self._status_label)
-        self.price_widget.addItem(self._drag_anchor)
-        self.price_widget.addItem(self._drag_region)
+        # Overlays must not count towards autoRange, or a crosshair left at a
+        # previous ticker's price stretches the y axis of the next chart.
+        for item in (
+            self._vline,
+            self._hline,
+            self._track_dot,
+            self._status_label,
+            self._drag_anchor,
+            self._drag_region,
+        ):
+            self.price_widget.addItem(item, ignoreBounds=True)
+
+    def _show_status(self, text: str):
+        self._reset_plot()
         self.price_widget.plotItem.vb.setLimits(xMin=None, xMax=None, maxXRange=None)
         self._timestamps = None
         self._prices = None
@@ -408,18 +416,8 @@ class ChartWidget(QWidget):
             self._render(history)
 
     def _render(self, history: HistoryData):
-        self._spinner_timer.stop()
+        self._reset_plot()
         self._status_label.setVisible(False)
-        self.price_widget.clear()
-        self.price_widget.addItem(self._vline)
-        self.price_widget.addItem(self._hline)
-        self.price_widget.addItem(self._track_dot)
-        self.price_widget.addItem(self._status_label)
-        self.price_widget.addItem(self._drag_anchor)
-        self.price_widget.addItem(self._drag_region)
-
-        if self._drag_active:
-            self._end_drag()
 
         if history.empty:
             self._show_status("No data available")
