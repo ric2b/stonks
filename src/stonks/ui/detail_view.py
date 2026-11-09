@@ -11,7 +11,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from stonks.services.stock_data import currency_format, fetch_info, fetch_news, price_and_change
+from stonks.services.stock_data import (
+    currency_format,
+    fetch_info,
+    fetch_news,
+    peek_info,
+    peek_news,
+    price_and_change,
+)
 from stonks.ui.workers import run_async
 
 STAT_COLUMNS = [
@@ -181,9 +188,15 @@ class NewsWidget(QWidget):
 
     def update_news(self, ticker: str):
         self._current_ticker = ticker
-        self._clear_news()
-
-        run_async(fetch_news, ticker, on_done=lambda items: self._on_news_received(items, ticker))
+        cached, fresh = peek_news(ticker)
+        if cached is not None:
+            self._on_news_received(cached, ticker)
+        else:
+            self._clear_news()
+        if not fresh:
+            run_async(
+                fetch_news, ticker, on_done=lambda items: self._on_news_received(items, ticker)
+            )
 
     def _clear_news(self):
         self._news_header.hide()
@@ -263,10 +276,14 @@ class DetailView(QWidget):
 
     def update_detail(self, ticker: str):
         self._current_ticker = ticker
-        for lbl in self._value_labels.values():
-            lbl.setText("--")
-
-        run_async(fetch_info, ticker, on_done=lambda info: self._on_info_received(info, ticker))
+        cached, fresh = peek_info(ticker)
+        if cached is not None:
+            self._on_info_received(cached, ticker)
+        else:
+            for lbl in self._value_labels.values():
+                lbl.setText("--")
+        if not fresh:
+            run_async(fetch_info, ticker, on_done=lambda info: self._on_info_received(info, ticker))
 
     def _on_info_received(self, info: dict, ticker: str):
         if ticker != self._current_ticker:

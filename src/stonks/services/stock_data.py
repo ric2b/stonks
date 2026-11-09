@@ -64,10 +64,15 @@ class HistoryData:
 
 
 class TTLCache[K, V]:
-    """Thread-safe dict whose entries expire after ``ttl`` seconds (never if None)."""
+    """Thread-safe dict whose entries expire after ``ttl`` seconds (never if None).
 
-    def __init__(self, ttl: float | None):
+    Expired entries are kept for ``retain`` seconds so the UI can show them via
+    peek() while fresh data loads.
+    """
+
+    def __init__(self, ttl: float | None, retain: float | None = None):
         self._ttl = ttl
+        self._retain = retain if retain is not None else ttl
         self._data: dict[K, tuple[V, float]] = {}
         self._lock = threading.Lock()
         self._next_sweep = 0.0
@@ -82,12 +87,24 @@ class TTLCache[K, V]:
             return None
         return value
 
+    def peek(self, key: K) -> tuple[V | None, bool]:
+        """Return (value, is_fresh), including expired-but-retained values."""
+        with self._lock:
+            entry = self._data.get(key)
+        if entry is None:
+            return None, False
+        value, stored_at = entry
+        age = time.monotonic() - stored_at
+        if self._retain is not None and age >= self._retain:
+            return None, False
+        return value, self._ttl is None or age < self._ttl
+
     def set(self, key: K, value: V) -> None:
         now = time.monotonic()
         with self._lock:
-            if self._ttl is not None and now >= self._next_sweep:
-                self._data = {k: e for k, e in self._data.items() if now - e[1] < self._ttl}
-                self._next_sweep = now + self._ttl
+            if self._retain is not None and now >= self._next_sweep:
+                self._data = {k: e for k, e in self._data.items() if now - e[1] < self._retain}
+                self._next_sweep = now + self._retain
             self._data[key] = (value, now)
 
     def clear(self) -> None:
@@ -95,10 +112,23 @@ class TTLCache[K, V]:
             self._data.clear()
 
 
-_info_cache: TTLCache[str, dict] = TTLCache(ttl=300.0)
-_history_cache: TTLCache[tuple[str, str, str], HistoryData] = TTLCache(ttl=60.0)
+_RETAIN = 3600.0
+_info_cache: TTLCache[str, dict] = TTLCache(ttl=300.0, retain=_RETAIN)
+_history_cache: TTLCache[tuple[str, str, str], HistoryData] = TTLCache(ttl=60.0, retain=_RETAIN)
 _meta_cache: TTLCache[str, tuple[str, str]] = TTLCache(ttl=None)
-_news_cache: TTLCache[str, list[dict]] = TTLCache(ttl=300.0)
+_news_cache: TTLCache[str, list[dict]] = TTLCache(ttl=300.0, retain=_RETAIN)
+
+
+def peek_history(ticker: str, period: str, interval: str) -> tuple[HistoryData | None, bool]:
+    return _history_cache.peek((ticker, period, interval))
+
+
+def peek_info(ticker: str) -> tuple[dict | None, bool]:
+    return _info_cache.peek(ticker)
+
+
+def peek_news(ticker: str) -> tuple[list[dict] | None, bool]:
+    return _news_cache.peek(ticker)
 
 
 def fetch_history(ticker: str, period: str, interval: str) -> HistoryData:
@@ -172,10 +202,6 @@ def batch_fetch_history(tickers: list[str], period: str, interval: str) -> dict[
 def populate_history_cache(results: dict[str, HistoryData], period: str, interval: str) -> None:
     for ticker, hd in results.items():
         _history_cache.set((ticker, period, interval), hd)
-
-
-def is_history_cached(ticker: str, period: str, interval: str) -> bool:
-    return _history_cache.get((ticker, period, interval)) is not None
 
 
 def fetch_names_and_currencies(tickers: list[str]) -> tuple[dict[str, str], dict[str, str]]:

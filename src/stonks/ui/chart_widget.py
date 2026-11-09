@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from stonks.config import INTRADAY_INTERVALS, TIME_RANGES
 from stonks.models.database import set_setting
-from stonks.services.stock_data import HistoryData, currency_format, fetch_history
+from stonks.services.stock_data import HistoryData, currency_format, fetch_history, peek_history
 from stonks.ui.workers import run_async
 
 _DASH = Qt.PenStyle.DashLine
@@ -68,6 +68,9 @@ def _fill_closed_market_gaps(
     return np.array(new_ts), np.array(new_px)
 
 
+_SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
 class ChartWidget(QWidget):
     range_changed = Signal(str)  # period label, e.g. "1M"
 
@@ -79,6 +82,11 @@ class ChartWidget(QWidget):
         self._is_up = True
         self._request_id = 0
         self._pending_request: int | None = None
+
+        self._spinner_frame = 0
+        self._spinner_timer = QTimer(self)
+        self._spinner_timer.setInterval(80)
+        self._spinner_timer.timeout.connect(self._advance_spinner)
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(5 * 60 * 1000)
@@ -256,11 +264,21 @@ class ChartWidget(QWidget):
             self.exchange_label.setText("")
             self._currency_prefix = ""
             self._currency_suffix = ""
-        self.price_label.setText("--")
-        self.change_label.setText("")
-        self._show_status("Loading...")
         self._sync_refresh_timer()
-        self._request_history()
+
+        # Supersede any in-flight request for the previous selection.
+        self._request_id += 1
+        self._pending_request = None
+        yf_period, yf_interval = TIME_RANGES[self._current_period]
+        cached, fresh = peek_history(ticker, yf_period, yf_interval)
+        if cached is not None:
+            self._render(cached)
+        else:
+            self.price_label.setText("--")
+            self.change_label.setText("")
+            self._show_loading()
+        if not fresh:
+            self._request_history()
 
     def _sync_refresh_timer(self):
         _, interval = TIME_RANGES[self._current_period]
@@ -319,7 +337,17 @@ class ChartWidget(QWidget):
         if self._drag_active:
             self._end_drag()
 
+    def _show_loading(self):
+        self._spinner_frame = 0
+        self._show_status(f"{_SPINNER[0]}  Loading")
+        self._spinner_timer.start()
+
+    def _advance_spinner(self):
+        self._spinner_frame = (self._spinner_frame + 1) % len(_SPINNER)
+        self._status_label.setText(f"{_SPINNER[self._spinner_frame]}  Loading")
+
     def _show_status(self, text: str):
+        self._spinner_timer.stop()
         self._hide_crosshair()
         self.price_widget.clear()
         self.price_widget.addItem(self._vline)
@@ -376,9 +404,11 @@ class ChartWidget(QWidget):
         )
 
     def _on_data_received(self, history: HistoryData, request_id: int):
-        if not self._is_latest_request(request_id):
-            return
+        if self._is_latest_request(request_id):
+            self._render(history)
 
+    def _render(self, history: HistoryData):
+        self._spinner_timer.stop()
         self._status_label.setVisible(False)
         self.price_widget.clear()
         self.price_widget.addItem(self._vline)

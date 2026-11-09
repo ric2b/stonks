@@ -338,3 +338,18 @@ def test_fetch_history_turns_missing_points_into_nan(mock_chart):
     assert np.isnan(hd.close[1])
     assert np.isnan(hd.volume[1])
     assert hd.close[2] == 3.0
+
+
+@patch("stonks.services.stock_data.time.monotonic")
+def test_ttl_cache_peek_returns_expired_values_until_retain(mock_time):
+    from stonks.services.stock_data import TTLCache
+
+    cache = TTLCache(ttl=60.0, retain=3600.0)
+    mock_time.return_value = 0.0
+    cache.set("k", "v")
+    assert cache.peek("k") == ("v", True)
+    mock_time.return_value = 120.0
+    assert cache.get("k") is None
+    assert cache.peek("k") == ("v", False)
+    mock_time.return_value = 3600.0
+    assert cache.peek("k") == (None, False)
