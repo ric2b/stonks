@@ -1,7 +1,6 @@
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 import numpy as np
@@ -149,15 +148,24 @@ def _fetch_one_history(ticker: str, period: str, interval: str) -> tuple[str, Hi
 
 
 def batch_fetch_history(tickers: list[str], period: str, interval: str) -> dict[str, HistoryData]:
-    if not tickers:
-        return {}
-    results = {}
-    with ThreadPoolExecutor(max_workers=min(len(tickers), 8)) as pool:
-        futures = {pool.submit(_fetch_one_history, t, period, interval): t for t in tickers}
-        for future in as_completed(futures):
-            ticker, hd = future.result()
-            if hd is not None:
+    # Daemon threads rather than ThreadPoolExecutor, whose workers are joined at
+    # interpreter exit and would make quitting wait for in-flight requests.
+    results: dict[str, HistoryData] = {}
+    lock = threading.Lock()
+    limit = threading.Semaphore(8)
+
+    def fetch(ticker: str) -> None:
+        with limit:
+            _, hd = _fetch_one_history(ticker, period, interval)
+        if hd is not None:
+            with lock:
                 results[ticker] = hd
+
+    threads = [threading.Thread(target=fetch, args=(t,), daemon=True) for t in tickers]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
     return results
 
 

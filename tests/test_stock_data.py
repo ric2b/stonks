@@ -144,10 +144,11 @@ def test_batch_fetch_history_single_ticker(mock_chart):
 
 @patch("stonks.services.stock_data.yahoo_api.fetch_chart")
 def test_batch_fetch_history_multi_ticker(mock_chart):
-    mock_chart.side_effect = [
-        _make_chart_response(closes=[100.0, 101.0, 102.0], n=3),
-        _make_chart_response(closes=[200.0, 201.0, 202.0], n=3),
-    ]
+    responses = {
+        "AAPL": _make_chart_response(closes=[100.0, 101.0, 102.0], n=3),
+        "MSFT": _make_chart_response(closes=[200.0, 201.0, 202.0], n=3),
+    }
+    mock_chart.side_effect = lambda ticker, **_kw: responses[ticker]
     results = batch_fetch_history(["AAPL", "MSFT"], "1mo", "1d")
     assert set(results.keys()) == {"AAPL", "MSFT"}
     assert results["AAPL"].close[0] == 100.0
@@ -166,10 +167,12 @@ def test_batch_fetch_history_no_tickers_returns_empty_dict():
 
 @patch("stonks.services.stock_data.yahoo_api.fetch_chart")
 def test_batch_fetch_history_skips_failed_tickers(mock_chart):
-    mock_chart.side_effect = [
-        _make_chart_response(closes=[100.0], n=1),
-        Exception("network error"),
-    ]
+    def fetch_chart(ticker, **_kw):
+        if ticker == "MSFT":
+            raise Exception("network error")
+        return _make_chart_response(closes=[100.0], n=1)
+
+    mock_chart.side_effect = fetch_chart
     results = batch_fetch_history(["AAPL", "MSFT"], "1mo", "1d")
     assert "AAPL" in results
     assert "MSFT" not in results
