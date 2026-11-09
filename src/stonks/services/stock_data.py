@@ -187,30 +187,27 @@ def fetch_names_and_currencies(tickers: list[str]) -> tuple[dict[str, str], dict
     return names, currencies
 
 
-def fetch_prices(tickers: list[str]) -> tuple[dict[str, tuple[float, float]], set[str]]:
-    """Return ({ticker: (price, change_pct)}, no_data_tickers)."""
+def price_and_change(info: dict) -> tuple[float, float] | None:
+    """Return (price, change_pct) from a quote dict, or None without a price."""
+    price = info.get("regularMarketPrice")
+    if price is None:
+        return None
+    change_pct = info.get("regularMarketChangePercent")
+    if change_pct is None:
+        prev = info.get("regularMarketPreviousClose")
+        change_pct = (price - prev) / prev * 100 if prev else 0.0
+    return float(price), float(change_pct)
+
+
+def fetch_prices(tickers: list[str]) -> dict[str, tuple[float, float]]:
+    """Return {ticker: (price, change_pct)} for tickers that have a price."""
+    quotes = yahoo_api.batch_quote(tickers)
     results = {}
-    no_data: set[str] = set()
-    try:
-        quotes = yahoo_api.batch_quote(tickers)
-    except Exception:
-        logger.debug("Batch price fetch failed")
-        return results, no_data
     for ticker in tickers:
-        info = quotes.get(ticker)
-        if info is None:
-            continue
-        price = info.get("regularMarketPrice")
-        if price is None:
-            no_data.add(ticker)
-            continue
-        change_pct = info.get("regularMarketChangePercent")
-        if change_pct is None:
-            prev = info.get("regularMarketPreviousClose")
-            if prev and prev != 0:
-                change_pct = ((price - prev) / prev) * 100
-        results[ticker] = (price, change_pct if change_pct is not None else 0.0)
-    return results, no_data
+        priced = price_and_change(quotes.get(ticker, {}))
+        if priced is not None:
+            results[ticker] = priced
+    return results
 
 
 def search_tickers(query: str, max_results: int = 5) -> list[dict]:

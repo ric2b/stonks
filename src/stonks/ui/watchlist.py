@@ -22,15 +22,14 @@ from stonks.models.database import (
     reorder_watchlist,
     update_ticker_meta,
 )
-from stonks.services.stock_data import currency_format
-from stonks.ui.workers import (
-    NameFetchWorker,
-    PriceUpdateWorker,
-    SearchWorker,
-    ValidateWorker,
-    shutdown_workers,
-    track_worker,
+from stonks.services.stock_data import (
+    currency_format,
+    fetch_names_and_currencies,
+    fetch_prices,
+    search_tickers,
+    validate_ticker,
 )
+from stonks.ui.workers import run_async
 
 
 class WatchlistItemWidget(QWidget):
@@ -119,7 +118,7 @@ class WatchlistWidget(QWidget):
     def __init__(self, conn: sqlite3.Connection, parent=None):
         super().__init__(parent)
         self.conn = conn
-        self._workers = []
+        self._price_refresh_pending = False
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(300)
@@ -177,8 +176,11 @@ class WatchlistWidget(QWidget):
         QApplication.instance().focusChanged.connect(self._on_focus_changed)
 
         self.refresh_timer = QTimer(self)
-        self.refresh_timer.timeout.connect(self._refresh_prices)
+        self.refresh_timer.timeout.connect(self._refresh)
         self.refresh_timer.start(REFRESH_INTERVAL_MS)
+        self._refresh()
+
+    def _refresh(self):
         self._refresh_prices()
         self._fetch_names()
 
@@ -229,13 +231,12 @@ class WatchlistWidget(QWidget):
         self._results_list.addItem(loading)
         self._show_results()
 
-        worker = SearchWorker(query)
-        worker.finished.connect(self._on_search_results)
-        track_worker(self._workers, worker)
-        worker.start()
+        run_async(
+            search_tickers, query, on_done=lambda results: self._on_search_results(results, query)
+        )
 
-    def _on_search_results(self, results: list):
-        if not self.search_input.text().strip():
+    def _on_search_results(self, results: list, query: str):
+        if self.search_input.text().strip() != query:
             return
         self._results_list.clear()
         if not results:
@@ -281,11 +282,12 @@ class WatchlistWidget(QWidget):
         if not ticker:
             return
         self.search_input.setEnabled(False)
-        worker = ValidateWorker(ticker)
-        worker.finished.connect(self._on_ticker_validated)
-        worker.error.connect(self._on_validate_error)
-        track_worker(self._workers, worker)
-        worker.start()
+        run_async(
+            validate_ticker,
+            ticker,
+            on_done=lambda valid: self._on_ticker_validated(valid, ticker),
+            on_error=lambda _e: self._on_ticker_validated(False, ticker),
+        )
 
     def _on_ticker_validated(self, valid: bool, ticker: str):
         self.search_input.setEnabled(True)
@@ -294,9 +296,6 @@ class WatchlistWidget(QWidget):
             self.search_input.clear()
         else:
             self.search_input.selectAll()
-
-    def _on_validate_error(self, error: str):
-        self.search_input.setEnabled(True)
 
     def _add_ticker_by_symbol(self, symbol: str):
         for i in range(self.list_widget.count()):
@@ -373,10 +372,7 @@ class WatchlistWidget(QWidget):
         tickers = self.get_tickers()
         if not tickers:
             return
-        worker = NameFetchWorker(tickers)
-        worker.finished.connect(self._on_names_fetched)
-        track_worker(self._workers, worker)
-        worker.start()
+        run_async(fetch_names_and_currencies, tickers, on_done=lambda r: self._on_names_fetched(*r))
 
     def _on_names_fetched(self, names: dict, currencies: dict):
         for i in range(self.list_widget.count()):
@@ -425,14 +421,18 @@ class WatchlistWidget(QWidget):
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             tickers.append(item.data(Qt.ItemDataRole.UserRole))
-        if not tickers:
+        if not tickers or self._price_refresh_pending:
             return
-        worker = PriceUpdateWorker(tickers)
-        worker.finished.connect(self._on_prices_updated)
-        track_worker(self._workers, worker)
-        worker.start()
+        self._price_refresh_pending = True
+        run_async(
+            fetch_prices,
+            tickers,
+            on_done=self._on_prices_updated,
+            on_error=lambda _e: self._on_prices_updated({}),
+        )
 
     def _on_prices_updated(self, prices: dict):
+        self._price_refresh_pending = False
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             ticker = item.data(Qt.ItemDataRole.UserRole)
@@ -446,11 +446,6 @@ class WatchlistWidget(QWidget):
             self.list_widget.item(i).data(Qt.ItemDataRole.UserRole)
             for i in range(self.list_widget.count())
         ]
-
-    def shutdown(self):
-        self.refresh_timer.stop()
-        self._search_timer.stop()
-        shutdown_workers(self._workers)
 
     def focus_search(self):
         self.search_input.setFocus()

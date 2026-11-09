@@ -15,7 +15,7 @@ _SEARCH_URL = "https://query2.finance.yahoo.com/v1/finance/search"
 _NEWS_URL = "https://finance.yahoo.com/xhr/ncp"
 
 # Network requests run on worker threads. Without a timeout a stalled socket
-# read blocks forever, keeping the QThread alive and aborting Qt on shutdown.
+# read blocks its worker thread forever.
 _TIMEOUT = 15
 
 _lock = threading.Lock()
