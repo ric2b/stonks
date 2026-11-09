@@ -17,7 +17,9 @@ def clear_stock_data_caches():
     stock_data._info_cache.clear()
     stock_data._history_cache.clear()
     stock_data._name_cache.clear()
+    stock_data._news_cache.clear()
     yield
     stock_data._info_cache.clear()
     stock_data._history_cache.clear()
     stock_data._name_cache.clear()
+    stock_data._news_cache.clear()
