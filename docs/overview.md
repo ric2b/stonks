@@ -1,7 +1,7 @@
 # Stonks — Overview
 
 Desktop stock-tracking app for Linux/macOS, inspired by the macOS Stocks app.  
-GPL-3.0 · Python 3.14 · PySide6 · PyQtGraph · yfinance · SQLite
+GPL-3.0 · Python 3.14 · PySide6 · PyQtGraph · Yahoo Finance HTTP API · SQLite
 
 ---
 
@@ -11,7 +11,7 @@ GPL-3.0 · Python 3.14 · PySide6 · PyQtGraph · yfinance · SQLite
 |---|---|
 | UI framework | PySide6 (Qt6) |
 | Charts | PyQtGraph |
-| Market data | yfinance |
+| Market data | Yahoo Finance HTTP API via `urllib` (no third-party client) |
 | Persistence | SQLite via raw `sqlite3` |
 | Dependency management | uv (`uv.lock` committed) |
 | Lint / format | ruff |
@@ -27,13 +27,14 @@ src/stonks/
 ├── models/
 │   └── database.py          SQLite schema + CRUD helpers
 ├── services/
-│   └── stock_data.py        yfinance wrappers with in-memory TTL cache + batch fetch
+│   ├── yahoo_api.py         Raw Yahoo Finance endpoints; cookie/crumb session shared across threads
+│   └── stock_data.py        Domain functions over yahoo_api with thread-safe TTL caches + batch fetch
 └── ui/
     ├── main_window.py       Top-level window: splitter, status bar, shortcuts, session restore, prefetch
     ├── watchlist.py         Left sidebar: live search, price refresh, drag-reorder
     ├── chart_widget.py      Price + volume chart, range tabs, crosshair, auto-refresh
     ├── detail_view.py       Stats grid (Open / High / Low / Vol / P/E / Mkt Cap / …)
-    ├── workers.py           QThread workers for all network calls
+    ├── workers.py           run_async(): background thread → main-thread callback
     └── style.py             Adwaita dark QSS stylesheet
 ```
 
@@ -55,21 +56,20 @@ MainWindow
 
 1. **Ticker selection** — `WatchlistWidget` emits `ticker_selected(str)`.
 2. **MainWindow** receives it, saves `last_ticker` to the settings table, then fans out to:
-   - `ChartWidget.update_chart(ticker)` — spawns a `HistoryWorker` (usually hits the in-memory cache)
-   - `DetailView.update_detail(ticker)` — spawns an `InfoWorker` (usually hits the in-memory cache)
-3. **Workers** run in `QThread`, call yfinance, and emit a signal back on the main thread.  
-   All workers are kept in a `_workers: list` on their parent widget to prevent garbage collection mid-run.
-4. **Company info round-trip** — once `InfoWorker` finishes, `DetailView` emits `info_received(ticker, name, exchange, currency)`. `MainWindow` forwards this to `ChartWidget.set_company_info()` to fill the chart header without a second network call.
+   - `ChartWidget.update_chart(ticker)` — `run_async(fetch_history, ...)` (usually hits the in-memory cache)
+   - `DetailView.update_detail(ticker)` — `run_async(fetch_info, ...)` (usually hits the in-memory cache)
+3. **Background work** — `run_async(fn, *args, on_done=..., on_error=...)` runs `fn` on a daemon thread and delivers the result or exception to the callback on the main thread via a single long-lived QObject. There are no `QThread` objects, so nothing can be destroyed while still running, and in-flight requests never delay quitting. Callbacks must check they still apply (current ticker, request id, search text) since responses can arrive out of order.
+4. **Company info round-trip** — once `fetch_info` returns, `DetailView` emits `info_received(ticker, name, exchange, currency)`. `MainWindow` forwards this to `ChartWidget.set_company_info()` to fill the chart header without a second network call.
 
 ### Prefetch
 
-On startup and whenever the time range changes, `MainWindow` spawns a `PrefetchWorker` that batch-fetches the current period's data for **all watchlist tickers at once** using `yf.download`. Results are stored directly into the in-memory history cache. By the time the user clicks any ticker, the data is already cached and the chart renders without a loading delay.
+On startup and whenever the time range changes, `MainWindow` runs `batch_fetch_history` in the background, fetching the current period's data for **all watchlist tickers** in parallel (up to 8 at a time). Results are stored directly into the in-memory history cache. By the time the user clicks any ticker, the data is already cached and the chart renders without a loading delay.
 
 ### Time ranges
 
 Defined in `config.TIME_RANGES` (ordered dict, also drives the tab bar and keyboard shortcuts):
 
-| Label | yfinance period | Interval |
+| Label | Yahoo `range` | Interval |
 |---|---|---|
 | 1D | 1d | 2m |
 | 1W | 5d | 5m |
@@ -90,16 +90,18 @@ Defined in `config.TIME_RANGES` (ordered dict, also drives the tab bar and keybo
 
 ### In-memory TTL (`services/stock_data.py`)
 
-Two module-level dicts keyed by ticker (or `(ticker, period, interval)`) with a monotonic timestamp:
+Module-level `TTLCache` instances (a dict guarded by a lock, since worker threads read and write them concurrently):
 
-| Function | TTL | Purpose |
+| Cache | TTL | Purpose |
 |---|---|---|
-| `fetch_info()` | 5 minutes | Eliminates company name / stats pop-in when re-selecting a ticker |
-| `fetch_history()` | 60 seconds | Avoids re-fetching chart data when switching back and forth |
+| `_info_cache` (`fetch_info()`) | 5 minutes | Eliminates stats pop-in when re-selecting a ticker |
+| `_history_cache` (`fetch_history()`) | 60 seconds | Avoids re-fetching chart data when switching back and forth |
+| `_news_cache` (`fetch_news()`) | 5 minutes | Avoids re-fetching news when re-selecting a ticker |
+| `_meta_cache` (`fetch_names_and_currencies()`) | never | Company name + currency per ticker |
 
-Stale entries are evicted from `_history_cache` on each write, keeping memory bounded.
+Expired entries are swept at most once per TTL period on write, keeping memory bounded.
 
-The prefetch system populates `_history_cache` via `populate_history_cache()`, which uses the same keys and TTL as `fetch_history()`. Individual `HistoryWorker` calls then find the data already present.
+The prefetch populates `_history_cache` via `populate_history_cache()`, using the same keys as `fetch_history()`.
 
 ### Settings (`models/database.py`)
 
@@ -114,9 +116,9 @@ The `settings` table is created by `init_db` alongside the watchlist table, so e
 
 ## Price Refresh
 
-Watchlist prices are refreshed every **60 seconds** via a `QTimer` in `WatchlistWidget`. Each tick spawns a `PriceUpdateWorker` that calls `yf.download` once for **all tickers** in a single batch request, computes the day-over-day change percentage, and updates the sidebar labels.
+Watchlist prices are refreshed every **60 seconds** via a `QTimer` in `WatchlistWidget`. Each tick calls `fetch_prices` once for **all tickers** in a single batch quote request and updates the sidebar labels, and retries the name/currency lookup for any ticker still missing it. A tick is skipped while the previous one is still in flight; a failed tick is simply retried on the next one.
 
-The chart auto-refreshes every **5 minutes** when the active period is intraday (1D or 1W). The timer starts and stops automatically as you switch ranges.
+The chart auto-refreshes every **5 minutes** when the active period uses an intraday interval (1D through YTD, see `INTRADAY_INTERVALS`). The refresh keeps the current plot on screen and only replaces it when new data arrives; a failed refresh leaves it untouched. Each history request gets an id so a slow response for a previous ticker or range is discarded.
 
 ---
 
@@ -126,13 +128,13 @@ The chart auto-refreshes every **5 minutes** when the active period is intraday 
 - **Zoom** — x-axis only (`setMouseEnabled(x=True, y=False)`). Y auto-scales to the visible x range (`setAutoVisible(y=True)`). Zoom-out is capped at the data extent via `setLimits(maxXRange=...)`.
 - **Crosshair** — vertical + horizontal dashed lines, a tracking dot on the price line, a date label floating above the chart area (parent: `ChartWidget`, never overlaps data), and a price label pinned to the right edge at the cursor's y position.
 - **Volume** — rendered as a bar chart below the price chart, x-linked so it pans/zooms in sync. Hidden when no volume data is present.
-- **Prices** — displayed without a currency symbol; yfinance returns values in the ticker's native currency.
+- **Prices** — shown in the ticker's native currency, formatted with `currency_format()` once the currency is known.
 
 ---
 
 ## Shutdown
 
-`MainWindow.closeEvent` calls `shutdown()` on `WatchlistWidget`, `ChartWidget`, and `DetailView`. Each stops its timers and calls `quit()` + `wait(2000ms)` on any in-flight worker threads before the process exits.
+No explicit worker shutdown is needed: background tasks run on daemon threads, which are abandoned when the process exits. Requests use a 15s socket timeout (`yahoo_api._TIMEOUT`) so a stalled connection can't block a thread forever.
 
 ---
 
