@@ -160,3 +160,41 @@ def test_slow_chart_response_for_previous_ticker_is_ignored(qtbot, db, yahoo):
         qtbot.wait(200)
 
     assert "409.0" in window.chart.price_label.text()
+
+
+def test_switching_to_cached_ticker_renders_without_loading_state(qtbot, db, yahoo):
+    add_ticker(db, "AAPL")
+    add_ticker(db, "MSFT")
+    window = MainWindow(db)
+    qtbot.addWidget(window)
+    chart, detail = window.chart, window.detail_view
+    qtbot.waitUntil(lambda: detail._value_labels["beta"].text() == "1.20", timeout=3000)
+    window.watchlist.select_ticker("MSFT")
+    qtbot.waitUntil(lambda: chart._prices is not None and chart._pending_request is None)
+    qtbot.waitUntil(lambda: detail._current_ticker == "MSFT")
+    qtbot.wait(100)
+
+    window.watchlist.select_ticker("AAPL")
+
+    # No event-loop turn has run, so anything shown came from the cache synchronously.
+    assert chart.price_label.text().startswith("$109.0")
+    assert not chart._status_label.isVisible()
+    assert detail._value_labels["beta"].text() == "1.20"
+
+
+def test_uncached_ticker_shows_loading_spinner(qtbot, db, yahoo):
+    add_ticker(db, "AAPL")
+    release = threading.Event()
+    with patch.object(
+        yahoo_api, "fetch_chart", side_effect=lambda *a, **k: (release.wait(2), CHART)[1]
+    ):
+        window = MainWindow(db)
+        qtbot.addWidget(window)
+        chart = window.chart
+        assert chart.price_label.text() == "--"
+        assert "Loading" in chart._status_label.toPlainText()
+        first_frame = chart._status_label.toPlainText()
+        qtbot.waitUntil(lambda: chart._status_label.toPlainText() != first_frame, timeout=1000)
+        release.set()
+        qtbot.waitUntil(lambda: not chart._status_label.isVisible(), timeout=3000)
+        assert not chart._spinner_timer.isActive()

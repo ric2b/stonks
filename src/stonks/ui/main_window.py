@@ -19,7 +19,7 @@ from stonks.config import APP_NAME, APP_VERSION, TIME_RANGES
 from stonks.models.database import get_setting, set_setting, update_ticker_meta
 from stonks.services.stock_data import (
     batch_fetch_history,
-    is_history_cached,
+    peek_history,
     populate_history_cache,
 )
 from stonks.ui.chart_widget import ChartWidget
@@ -291,5 +291,5 @@ class MainWindow(QMainWindow):
         self.detail_view.update_detail(ticker)
         self.news_widget.update_news(ticker)
         yf_period, yf_interval = TIME_RANGES[self.chart._current_period]
-        if not is_history_cached(ticker, yf_period, yf_interval):
+        if peek_history(ticker, yf_period, yf_interval)[0] is None:
             self.status_bar.show_message(f"Loading {ticker}…", 3000)
